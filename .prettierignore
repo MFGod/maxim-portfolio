@@ -1,0 +1,6 @@
+.next
+node_modules
+package-lock.json
+
+# Артефакты Playwright MCP: снимки страницы и логи консоли.
+.playwright-mcp/

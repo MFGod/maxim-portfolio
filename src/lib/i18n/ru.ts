@@ -1,0 +1,290 @@
+import { deepFreeze } from '@/lib/freeze';
+
+/**
+ * Русский словарь — источник набора ключей: `TranslationKey` выводится из него,
+ * и остальные языки обязаны покрыть его целиком. Строки Settings только здесь.
+ */
+export const ru = deepFreeze({
+  'app.title': 'Настройки',
+  'app.subtitle': 'Внешний вид и поведение рабочего стола',
+
+  'search.placeholder': 'Поиск настроек…',
+  'search.label': 'Поиск по настройкам',
+  'search.empty': 'Ничего не найдено',
+  'search.clear': 'Очистить поиск',
+
+  'nav.sections': 'Разделы',
+  'nav.back': 'Назад',
+
+  'section.appearance': 'Внешний вид',
+  'section.appearance.summary': 'Тема, акцент, обои и плотность интерфейса',
+  'section.motion': 'Движение',
+  'section.motion.summary': 'Анимации окон, дока и наведения',
+  'section.desktop': 'Рабочий стол',
+  'section.desktop.summary': 'Док, системная панель, ярлыки',
+  'section.files': 'Файлы',
+  'section.files.summary': 'Режим отображения папок и размер значков',
+  'section.windows': 'Окна',
+  'section.windows.summary': 'Как открываются и закрываются окна',
+  'section.behavior': 'Поведение',
+  'section.behavior.summary': 'Что происходит при загрузке',
+  'section.accessibility': 'Доступность',
+  'section.accessibility.summary': 'Контраст, размер текста, фокус, клавиатура',
+  'section.language': 'Язык',
+  'section.language.summary': 'Язык системных надписей',
+  'section.about': 'О системе',
+  'section.about.summary': 'Версия и технологии',
+
+  'appearance.theme.label': 'Тема',
+  'appearance.theme.description':
+    'Системная тема следует за настройкой операционной системы',
+  'appearance.theme.system': 'Системная',
+  'appearance.theme.light': 'Светлая',
+  'appearance.theme.dark': 'Тёмная',
+  'appearance.theme.keywords': 'тема оформление светлая тёмная ночь theme dark light',
+
+  'appearance.accent.label': 'Акцент',
+  'appearance.accent.description': 'Цвет кнопок, ссылок, выделения и фокуса',
+  'appearance.accent.ember': 'Янтарь',
+  'appearance.accent.moss': 'Мох',
+  'appearance.accent.tide': 'Прилив',
+  'appearance.accent.plum': 'Слива',
+  'appearance.accent.stone': 'Камень',
+  'appearance.accent.keywords': 'акцент цвет выделение ссылки accent color',
+
+  'appearance.wallpaper.label': 'Обои',
+  'appearance.wallpaper.default': 'Графит',
+  'appearance.wallpaper.minimal': 'Минимал',
+  'appearance.wallpaper.deep': 'Глубокий',
+  'appearance.wallpaper.gradient': 'Градиент',
+  'appearance.wallpaper.keywords': 'обои фон рабочий стол wallpaper background',
+
+  'appearance.transparency.label': 'Прозрачность',
+  'appearance.transparency.description': 'Размытие под доком, панелью и окнами',
+  'appearance.transparency.default': 'Обычная',
+  'appearance.transparency.reduced': 'Пониженная',
+  'appearance.transparency.off': 'Выключена',
+  'appearance.transparency.keywords': 'прозрачность размытие стекло transparency blur',
+
+  'appearance.density.label': 'Плотность',
+  'appearance.density.description': 'Отступы содержимого и высота заголовков окон',
+  'appearance.density.comfortable': 'Просторная',
+  'appearance.density.compact': 'Плотная',
+  'appearance.density.keywords': 'плотность отступы компактный density compact',
+
+  'motion.animations.label': 'Анимации',
+  'motion.animations.description': 'Общий уровень движения в интерфейсе',
+  'motion.animations.full': 'Полные',
+  'motion.animations.reduced': 'Пониженные',
+  'motion.animations.off': 'Выключены',
+  'motion.animations.keywords': 'анимации движение motion animation',
+  'motion.animations.systemNotice':
+    'Система просит уменьшить движение — уровень понижен автоматически',
+
+  'motion.windowAnimations.label': 'Анимация окон',
+  'motion.windowAnimations.description': 'Появление и закрытие окон',
+  'motion.windowAnimations.keywords': 'окна анимация появление window animation',
+
+  'motion.dockAnimations.label': 'Анимация дока',
+  'motion.dockAnimations.description': 'Отклик иконок дока на курсор',
+  'motion.dockAnimations.keywords': 'док анимация dock animation',
+
+  'motion.hoverEffects.label': 'Эффекты наведения',
+  'motion.hoverEffects.description':
+    'Подъём иконок под курсором. Подсветка остаётся всегда',
+  'motion.hoverEffects.keywords': 'наведение курсор hover',
+
+  'desktop.files.label': 'Файлы рабочего стола',
+  'desktop.files.description':
+    'Папки и текстовые документы, созданные на рабочем столе',
+  'desktop.files.action': 'Удалить все файлы',
+  'desktop.files.confirm': 'Удалить все файлы?',
+  'desktop.files.confirmBody':
+    'Папки и документы, созданные на рабочем столе, будут удалены без возврата.',
+  'desktop.files.keywords': 'файлы папки документы удалить очистить files folders',
+  'desktop.showIcons.label': 'Ярлыки на рабочем столе',
+  'desktop.showIcons.keywords': 'ярлыки иконки рабочий стол icons desktop',
+  'desktop.showDock.label': 'Док',
+  'desktop.showDock.keywords': 'док панель приложений dock',
+  'desktop.autoHideDock.label': 'Скрывать док',
+  'desktop.autoHideDock.description': 'Док появляется, когда курсор у нижнего края',
+  'desktop.autoHideDock.keywords': 'док скрывать автоскрытие dock autohide',
+  'desktop.dockSize.label': 'Размер иконок дока',
+  'desktop.dockSize.keywords': 'док размер иконок dock size',
+  'desktop.dockMagnification.label': 'Увеличение иконок',
+  'desktop.dockMagnification.description': 'Иконки растут по мере приближения курсора',
+  'desktop.dockMagnification.keywords': 'док увеличение лупа magnification',
+  'desktop.showMenuBar.label': 'Системная панель',
+  'desktop.showMenuBar.keywords': 'панель меню часы menu bar',
+  'desktop.windowShadows.label': 'Тени окон',
+  'desktop.windowShadows.keywords': 'тени окна shadows',
+
+  'files.iconSize.label': 'Размер значков',
+  'files.iconSize.description':
+    'Общий для ярлыков рабочего стола и плиток в окнах папок',
+  'files.iconSize.keywords': 'значки размер иконки плитки icon size',
+
+  'files.view.label': 'Режим отображения',
+  'files.view.description': 'Как показывать содержимое папок в окнах',
+  'files.view.keywords': 'вид режим значки список колонки галерея view',
+  'files.view.icons': 'Значки',
+  'files.view.list': 'Список',
+  'files.view.columns': 'Колонки',
+  'files.view.gallery': 'Галерея',
+
+  'files.group.label': 'Группировка',
+  'files.group.description': 'Работает в режимах «Значки» и «Список»',
+  'files.group.keywords': 'группировка группы разбить по типу дате group',
+  'files.group.none': 'Без групп',
+  'files.group.kind': 'По типу',
+  'files.group.name': 'По имени',
+  'files.group.modified': 'По дате',
+
+  'windows.rememberPositions.label': 'Запоминать положение окон',
+  'windows.rememberPositions.description': 'Окно откроется там же, где его закрыли',
+  'windows.rememberPositions.keywords': 'окна положение размер память position',
+  'windows.openCentered.label': 'Открывать по центру',
+  'windows.openCentered.description': 'Без каскадного смещения новых окон',
+  'windows.openCentered.keywords': 'окна центр каскад centered',
+  'windows.openMaximized.label': 'Открывать развёрнутыми',
+  'windows.openMaximized.keywords': 'окна развернуть на весь экран maximized',
+  'windows.confirmClose.label': 'Спрашивать перед закрытием',
+  'windows.confirmClose.description': 'Подтверждение при закрытии окна',
+  'windows.confirmClose.keywords': 'закрытие подтверждение confirm close',
+  'windows.motionHint':
+    'Анимация и тени окон настраиваются в разделах «Движение» и «Рабочий стол»',
+
+  'behavior.startup.label': 'При загрузке',
+  'behavior.startup.description': 'Что открывать при следующем визите',
+  'behavior.startup.none': 'Ничего',
+  'behavior.startup.lastApp': 'Последнее приложение',
+  'behavior.startup.session': 'Всю сессию',
+  'behavior.startup.keywords': 'запуск сессия восстановление startup session restore',
+  'behavior.startupAnimation.label': 'Стартовая заставка',
+  'behavior.startupAnimation.description':
+    'Короткая заставка при первом открытии за сессию',
+  'behavior.startupAnimation.keywords': 'заставка загрузка boot splash',
+  'behavior.welcomeMessage.label': 'Приветствие на рабочем столе',
+  'behavior.welcomeMessage.keywords': 'приветствие имя заголовок welcome',
+
+  'accessibility.highContrast.label': 'Повышенный контраст',
+  'accessibility.highContrast.description': 'Более заметные границы и текст',
+  'accessibility.highContrast.keywords': 'контраст границы contrast',
+  'accessibility.textScale.label': 'Размер текста',
+  'accessibility.textScale.default': 'Обычный',
+  'accessibility.textScale.large': 'Крупный',
+  'accessibility.textScale.larger': 'Очень крупный',
+  'accessibility.textScale.keywords': 'текст размер шрифт крупный text size larger',
+  'accessibility.focusRing.label': 'Индикатор фокуса',
+  'accessibility.focusRing.description':
+    'Рамка вокруг элемента, выбранного с клавиатуры',
+  'accessibility.focusRing.standard': 'Стандартный',
+  'accessibility.focusRing.strong': 'Усиленный',
+  'accessibility.focusRing.keywords': 'фокус рамка клавиатура focus',
+  'accessibility.singleKeyShortcuts.label': 'Одноклавишные сокращения',
+  'accessibility.singleKeyShortcuts.description':
+    'Клавиши «/», «?» и Esc без модификаторов. Остальные сокращения работают всегда',
+  'accessibility.singleKeyShortcuts.keywords':
+    'клавиатура сокращения горячие клавиши keyboard',
+  'accessibility.motionHint': 'Уменьшить движение можно в разделе «Движение»',
+
+  'language.label': 'Язык интерфейса',
+  'language.description': 'Язык надписей оболочки и настроек',
+  'language.ru': 'Русский',
+  'language.en': 'English',
+  'language.keywords': 'язык локализация language locale',
+  'language.note':
+    'Переключается язык системных надписей. Содержимое резюме, проектов и опыта остаётся на русском.',
+
+  'about.version': 'Версия',
+  'about.builtWith': 'Собрано на',
+  'about.links': 'Ссылки',
+  'about.sourceNote': 'Репозиторий проекта пока не опубликован.',
+
+  'common.cancel': 'Отмена',
+
+  'close.confirm.title': 'Закрыть окно?',
+  'close.confirm.body': 'Его можно открыть снова из дока — ничего не потеряется.',
+  'close.confirm.submit': 'Закрыть',
+
+  'reset.label': 'Сброс настроек',
+  'reset.description': 'Вернуть все настройки к значениям по умолчанию',
+  'reset.action': 'Сбросить',
+  'reset.keywords': 'сброс по умолчанию reset defaults',
+  'reset.confirm.title': 'Сбросить настройки?',
+  'reset.confirm.body':
+    'Все настройки вернутся к значениям по умолчанию. Положение ярлыков и содержимое сайта не изменятся.',
+  'reset.confirm.submit': 'Сбросить',
+
+  'arcade.title': 'Аркада',
+  'arcade.subtitle': 'Маленькие игры и общая таблица результатов',
+  'arcade.games': 'Игры',
+  'arcade.start': 'Начать',
+  'arcade.restart': 'Заново',
+  'arcade.loading': 'Загружаю игру…',
+  'arcade.hint.keyboard': 'Стрелки двигают курсор, Enter меняет фишки местами',
+
+  'arcade.hud.score': 'Очки',
+  'arcade.hud.time': 'Время',
+
+  'arcade.threeInRow.name': 'Три в ряд',
+  'arcade.threeInRow.hint':
+    'Собирайте три и больше одинаковых. Шестьдесят секунд на максимум очков',
+  'arcade.threeInRow.board': 'Игровое поле',
+  'arcade.threeInRow.tile': 'Фишка',
+  'arcade.sigil.1': 'Ромб',
+  'arcade.sigil.2': 'Треугольник',
+  'arcade.sigil.3': 'Круг',
+  'arcade.sigil.4': 'Шестиугольник',
+  'arcade.sigil.5': 'Крест',
+
+  'arcade.hud.blocks': 'Блоки',
+
+  'arcade.towerBuilder.name': 'Башня',
+  'arcade.towerBuilder.hint':
+    'Сбрасывайте блок в нужный момент. Стройте как можно выше',
+  'arcade.towerBuilder.drop': 'Сбросить блок',
+  'arcade.towerBuilder.controls': 'Клик, касание или пробел сбрасывает блок',
+
+  'arcade.hud.round': 'Раунд',
+
+  'arcade.memory.name': 'Память',
+  'arcade.memory.hint': 'Запомните последовательность и повторите её в том же порядке',
+  'arcade.memory.board': 'Плитки',
+  'arcade.memory.tile': 'Плитка',
+  'arcade.memory.watch': 'Смотрите',
+  'arcade.memory.repeat': 'Повторите',
+
+  'arcade.result.title': 'Игра окончена',
+  'arcade.result.score': 'Ваш счёт',
+  'arcade.result.place': 'Ваше место',
+  'arcade.result.outsideTop': 'Вне первой десятки',
+  'arcade.result.saved': 'Результат сохранён',
+
+  'arcade.save.prompt': 'Сохранить результат в таблице',
+  'arcade.save.name': 'Имя игрока',
+  'arcade.save.placeholder': 'Как вас записать',
+  'arcade.save.submit': 'Сохранить',
+  'arcade.save.sending': 'Отправляю…',
+  'arcade.save.skip': 'Не сохранять',
+  'arcade.save.errorName': 'Имя — от двух до шестнадцати символов',
+  'arcade.save.errorRejected': 'Сервер не принял этот результат',
+  'arcade.save.errorRate': 'Слишком часто. Попробуйте через минуту',
+  'arcade.save.errorUnavailable': 'Таблица результатов недоступна',
+
+  'arcade.board.title': 'Таблица результатов',
+  'arcade.board.rank': 'Место',
+  'arcade.board.player': 'Игрок',
+  'arcade.board.score': 'Очки',
+  'arcade.board.date': 'Дата',
+  'arcade.board.you': 'Ваш результат',
+  'arcade.board.empty': 'Здесь пока никто не играл',
+  'arcade.board.loading': 'Загружаю таблицу…',
+  'arcade.board.error': 'Таблица результатов недоступна',
+  'arcade.board.retry': 'Повторить',
+  'arcade.board.volatile':
+    'Хранилище не подключено — таблица обнулится при перезапуске',
+} as const);
+
+export type TranslationKey = keyof typeof ru;
+export type Dictionary = Record<TranslationKey, string>;
