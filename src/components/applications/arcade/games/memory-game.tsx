@@ -116,51 +116,48 @@ export function MemoryGame({ onFinish }: GameProps) {
     };
   }, [show]);
 
-  const press = useCallback(
-    async (tile: number) => {
-      if (phase !== 'input' || overRef.current) return;
+  const press = async (tile: number) => {
+    if (phase !== 'input' || overRef.current) return;
 
-      const expected = sequenceRef.current[stepRef.current];
+    const expected = sequenceRef.current[stepRef.current];
 
-      if (tile !== expected) {
-        overRef.current = true;
-        setPhase('over');
-        setMistake(tile);
-        await sleep(animated ? MISTAKE_PAUSE_MS : 0);
-        if (!aliveRef.current) return;
-        onFinishRef.current({ game: 'memory', rounds: roundsRef.current });
-        return;
-      }
+    if (tile !== expected) {
+      overRef.current = true;
+      setPhase('over');
+      setMistake(tile);
+      await sleep(animated ? MISTAKE_PAUSE_MS : 0);
+      if (!aliveRef.current) return;
+      onFinishRef.current({ game: 'memory', rounds: roundsRef.current });
+      return;
+    }
 
-      // Шаг засчитывается сразу, а не после вспышки: между ними игрок успевает
-      // нажать следующую плитку, и она сравнивалась бы с уже пройденной.
-      stepRef.current += 1;
-      const roundComplete = stepRef.current >= sequenceRef.current.length;
+    // Шаг засчитывается сразу, а не после вспышки: между ними игрок успевает
+    // нажать следующую плитку, и она сравнивалась бы с уже пройденной.
+    stepRef.current += 1;
+    const roundComplete = stepRef.current >= sequenceRef.current.length;
 
-      // Раунд пройден — приём ввода закрывается сейчас же. Иначе лишнее нажатие
-      // в паузе перед показом сверялось бы с концом последовательности и
-      // засчитывалось как ошибка.
-      if (roundComplete) setPhase('watch');
+    // Раунд пройден — приём ввода закрывается сейчас же. Иначе лишнее нажатие
+    // в паузе перед показом сверялось бы с концом последовательности и
+    // засчитывалось как ошибка.
+    if (roundComplete) setPhase('watch');
 
-      setLit(tile);
-      await sleep(TAP_FLASH_MS);
-      if (!aliveRef.current || overRef.current) return;
-      setLit(null);
+    setLit(tile);
+    await sleep(TAP_FLASH_MS);
+    if (!aliveRef.current || overRef.current) return;
+    setLit(null);
 
-      if (!roundComplete) return;
+    if (!roundComplete) return;
 
-      roundsRef.current += 1;
-      setRounds(roundsRef.current);
+    roundsRef.current += 1;
+    setRounds(roundsRef.current);
 
-      const grown = extend(sequenceRef.current, Math.random);
-      sequenceRef.current = grown;
+    const grown = extend(sequenceRef.current, Math.random);
+    sequenceRef.current = grown;
 
-      await sleep(ROUND_BREAK_MS);
-      if (!aliveRef.current || overRef.current) return;
-      void show(grown, roundsRef.current + 1, runRef.current);
-    },
-    [animated, phase, show, sleep],
-  );
+    await sleep(ROUND_BREAK_MS);
+    if (!aliveRef.current || overRef.current) return;
+    void show(grown, roundsRef.current + 1, runRef.current);
+  };
 
   const score = scoreOf({ game: 'memory', rounds });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import { useWindowManager } from '@/lib/window-manager';
 
@@ -33,11 +33,11 @@ export function TerminalApp() {
     if (node) node.scrollTop = node.scrollHeight;
   }, [lines]);
 
-  const push = useCallback((text: string, kind: Line['kind']) => {
+  const push = (text: string, kind: Line['kind']) => {
     setLines((current) => [...current, { id: nextId.current++, text, kind }]);
-  }, []);
+  };
 
-  const submit = useCallback(() => {
+  const submit = () => {
     const input = value;
     setValue('');
     setHistoryIndex(-1);
@@ -58,7 +58,7 @@ export function TerminalApp() {
       const { app, slug } = result.effect;
       open(app, slug ? { slug } : undefined);
     }
-  }, [open, push, value]);
+  };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {

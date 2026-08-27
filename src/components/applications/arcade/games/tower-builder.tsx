@@ -113,7 +113,7 @@ export function TowerBuilder({ onFinish }: GameProps) {
     return () => cancelAnimationFrame(frame);
   }, [paint]);
 
-  const drop = useCallback(() => {
+  const drop = () => {
     if (overRef.current) return;
 
     const stack = rowsRef.current;
@@ -152,7 +152,7 @@ export function TowerBuilder({ onFinish }: GameProps) {
     moving.width = result.block.width;
     moving.direction = directionOf(placed);
     paint();
-  }, [animated, paint]);
+  };
 
   // Итог уходит с задержкой: сначала обломок долетает, потом появляется оверлей.
   useEffect(() => {

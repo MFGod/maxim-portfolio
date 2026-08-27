@@ -65,12 +65,12 @@ export function GameShell({ game }: { game: GameDefinition }) {
 
   useEffect(fetchBoard, [fetchBoard]);
 
-  const refreshBoard = useCallback(() => {
+  const refreshBoard = () => {
     setBoard({ status: 'loading' });
     fetchBoard();
-  }, [fetchBoard]);
+  };
 
-  const start = useCallback(async () => {
+  const start = async () => {
     setPhase('opening');
     setResult(null);
     setOwn(null);
@@ -84,42 +84,36 @@ export function GameShell({ game }: { game: GameDefinition }) {
     setToken(issued);
     setRunId((current) => current + 1);
     setPhase('playing');
-  }, [game.id]);
+  };
 
-  const finish = useCallback(
-    (run: RunReport) => {
-      setResult({ run, score: scoreOf(run) });
-      setPhase('over');
-      refreshBoard();
-    },
-    [refreshBoard],
-  );
+  const finish = (run: RunReport) => {
+    setResult({ run, score: scoreOf(run) });
+    setPhase('over');
+    refreshBoard();
+  };
 
-  const save = useCallback(
-    async (name: string) => {
-      if (!token || !result) return;
-      setSaveStatus('sending');
-      setFailure(null);
+  const save = async (name: string) => {
+    if (!token || !result) return;
+    setSaveStatus('sending');
+    setFailure(null);
 
-      try {
-        const view = await submitRun({ token, name, run: result.run });
-        if (!alive.current) return;
-        setBoard({ status: 'ready', view });
-        setOwn({ id: view.entryId, score: result.score, rank: view.rank });
-      } catch (error) {
-        if (!alive.current) return;
-        setFailure(error instanceof ArcadeError ? error.reason : 'unavailable');
-      } finally {
-        if (alive.current) setSaveStatus('idle');
-      }
-    },
-    [token, result],
-  );
+    try {
+      const view = await submitRun({ token, name, run: result.run });
+      if (!alive.current) return;
+      setBoard({ status: 'ready', view });
+      setOwn({ id: view.entryId, score: result.score, rank: view.rank });
+    } catch (error) {
+      if (!alive.current) return;
+      setFailure(error instanceof ArcadeError ? error.reason : 'unavailable');
+    } finally {
+      if (alive.current) setSaveStatus('idle');
+    }
+  };
 
-  const skip = useCallback(() => {
+  const skip = () => {
     if (!result) return;
     setOwn({ id: null, score: result.score, rank: null });
-  }, [result]);
+  };
 
   const Game = game.Component;
   const saved = own !== null;

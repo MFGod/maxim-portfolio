@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useState } from 'react';
 
 export type History<T> = { entries: T[]; index: number };
 
@@ -57,36 +57,26 @@ export function useNavigationHistory<T>(
     index: 0,
   });
 
-  const go = useCallback(
-    (next: T) => {
-      setHistory((state) => pushEntry(state, next, isSame));
-    },
-    [isSame],
-  );
+  const go = (next: T) => setHistory((state) => pushEntry(state, next, isSame));
 
-  const back = useCallback(() => {
+  const back = () =>
     setHistory((state) =>
       state.index > 0 ? { ...state, index: state.index - 1 } : state,
     );
-  }, []);
 
-  const forward = useCallback(() => {
+  const forward = () =>
     setHistory((state) =>
       state.index < state.entries.length - 1
         ? { ...state, index: state.index + 1 }
         : state,
     );
-  }, []);
 
-  return useMemo(
-    () => ({
-      current: currentOf(history, initial),
-      go,
-      back,
-      forward,
-      canBack: history.index > 0,
-      canForward: history.index < history.entries.length - 1,
-    }),
-    [back, forward, go, history, initial],
-  );
+  return {
+    current: currentOf(history, initial),
+    go,
+    back,
+    forward,
+    canBack: history.index > 0,
+    canForward: history.index < history.entries.length - 1,
+  };
 }

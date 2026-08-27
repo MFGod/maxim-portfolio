@@ -3,8 +3,8 @@
 import {
   SegmentedControl,
   SettingRow,
-  Slider,
 } from '@/components/applications/settings/controls';
+import { Slider } from '@/components/applications/settings/pickers';
 import { FILE_GROUPS, FILE_VIEWS, ICON_SIZE_RANGE } from '@/lib/settings/types';
 
 import { options, useSection, type SectionProps } from './shared';

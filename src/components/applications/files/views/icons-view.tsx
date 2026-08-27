@@ -1,6 +1,7 @@
 'use client';
 
-import { GroupTitle, ItemTile, type ItemView } from './shared';
+import { GroupTitle, ItemTile } from './items';
+import { type ItemView } from './shared';
 
 /**
  * Режим значков: сетка квадратных плиток того же габарита, что ярлыки рабочего

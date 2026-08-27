@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { useIsomorphicLayoutEffect } from '@/hooks/use-isomorphic-layout-effect';
 import { settingsStore } from '@/lib/settings/store';
@@ -59,7 +59,7 @@ export function useBootSequence() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const skip = useCallback(() => bootStore.stop(), []);
+  const skip = () => bootStore.stop();
 
   return { isBooting, skip };
 }

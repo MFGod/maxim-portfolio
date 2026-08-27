@@ -2,7 +2,6 @@
 
 import { motion, useReducedMotion } from 'motion/react';
 import {
-  useCallback,
   useEffect,
   useRef,
   type CSSProperties,
@@ -61,11 +60,8 @@ export function WindowFrame({ instance, title, subtitle, children }: Props) {
   const isMinimized = instance.status === 'minimized';
   const zIndex = state.order.indexOf(instance.id);
 
-  const handleFocus = useCallback(() => focus(instance.id), [focus, instance.id]);
-  const handleCommit = useCallback(
-    (rect: Rect) => commitRect(instance.id, rect),
-    [commitRect, instance.id],
-  );
+  const handleFocus = () => focus(instance.id);
+  const handleCommit = (rect: Rect) => commitRect(instance.id, rect);
 
   const { startMove, startResize, nudge } = useWindowGesture({
     nodeRef,

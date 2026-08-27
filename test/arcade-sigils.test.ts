@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { SIGIL_COUNT, sigilNameKey } from '@/components/applications/arcade/sigils';
@@ -18,7 +18,14 @@ describe('грани игрового поля', () => {
   });
 
   it('у каждой грани есть свой тон в дизайн-системе', () => {
-    const styles = readFileSync('src/app/globals.css', 'utf8');
+    // Оформление разложено по разделам: тон ищется во всей системе, а не в
+    // одном файле — иначе тест ломался бы от любой перестановки разделов.
+    const styles = [
+      readFileSync('src/app/globals.css', 'utf8'),
+      ...readdirSync('src/app/styles')
+        .filter((name) => name.endsWith('.css'))
+        .map((name) => readFileSync(`src/app/styles/${name}`, 'utf8')),
+    ].join('\n');
     for (let kind = 1; kind <= TILE_KINDS; kind += 1) {
       expect(styles, `--color-sigil-${kind}`).toContain(`--color-sigil-${kind}:`);
     }

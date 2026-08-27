@@ -3,18 +3,10 @@
 import { ChevronRight } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import type { ColumnPane } from '@/lib/files/browser-items';
 
-import { ItemRow, type BrowserItem, type ItemView } from './shared';
-
-/** Одна панель цепочки: содержимое папки и та её подпапка, в которую вошли. */
-export type ColumnPane = {
-  /** `null` — корень, то есть рабочий стол. */
-  id: string | null;
-  title: string;
-  items: BrowserItem[];
-  /** Подпапка, раскрытая в следующей панели. */
-  openedId: string | null;
-};
+import { ItemRow } from './items';
+import { type ItemView } from './shared';
 
 /**
  * Режим колонок: путь виден целиком — каждая папка цепочки показана своей

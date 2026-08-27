@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  useCallback,
-  type PointerEvent as ReactPointerEvent,
-  type RefObject,
-} from 'react';
+import { type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 
 import type { AppId } from '@/data/applications';
 import { usePointerDrag } from '@/hooks/use-pointer-drag';
@@ -98,34 +94,25 @@ export function useWindowGesture({
     onCommit,
   });
 
-  const startMove = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) =>
-      begin({
-        event,
-        start: rect,
-        compute: (start, dx, dy) => moveRect(start, dx, dy, workspace),
-        guardInteractive: true,
-      }),
-    [begin, rect, workspace],
-  );
+  const startMove = (event: ReactPointerEvent<HTMLElement>) =>
+    begin({
+      event,
+      start: rect,
+      compute: (start, dx, dy) => moveRect(start, dx, dy, workspace),
+      guardInteractive: true,
+    });
 
-  const startResize = useCallback(
-    (event: ReactPointerEvent<HTMLElement>, edge: ResizeEdge) =>
-      begin({
-        event,
-        start: rect,
-        compute: (start, dx, dy) => resizeRect(start, edge, dx, dy, app, workspace),
-      }),
-    [app, begin, rect, workspace],
-  );
+  const startResize = (event: ReactPointerEvent<HTMLElement>, edge: ResizeEdge) =>
+    begin({
+      event,
+      start: rect,
+      compute: (start, dx, dy) => resizeRect(start, edge, dx, dy, app, workspace),
+    });
 
-  const nudge = useCallback(
-    (dx: number, dy: number) => {
-      if (disabled) return;
-      onCommit(moveRect(rect, dx, dy, workspace));
-    },
-    [disabled, onCommit, rect, workspace],
-  );
+  const nudge = (dx: number, dy: number) => {
+    if (disabled) return;
+    onCommit(moveRect(rect, dx, dy, workspace));
+  };
 
   return { startMove, startResize, nudge };
 }

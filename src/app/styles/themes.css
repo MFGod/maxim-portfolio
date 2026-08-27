@@ -1,0 +1,291 @@
+/* --------------------------------------------------------------------------
+   Темы
+   -------------------------------------------------------------------------- */
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/* Светлая тема — не инверсия тёмной: пергамент и тёмная сепия текста.
+   Переопределяются только значения токенов; ни один компонент об этом не знает. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --color-void: #e4dccb;
+  --color-surface-0: #ebe4d4;
+  --color-surface-1: #f4eee0;
+  --color-surface-2: #faf5ea;
+  --color-surface-3: #fdfaf3;
+  --color-surface-4: #fffdf8;
+
+  --color-line-subtle: #2a231414;
+  --color-line: #2a231429;
+  --color-line-strong: #2a231447;
+
+  --color-ink: #221d15;
+  --color-ink-muted: #453d30;
+  --color-ink-faint: #635a4a;
+
+  --color-danger: #9c3624;
+  --color-focus: var(--color-accent);
+  --color-focus-wash: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  --color-scroll-thumb: #c8bda4;
+
+  /* Те же грани на пергаменте: светлые металлы на нём не читаются. */
+  --color-sigil-1: #8a6512;
+  --color-sigil-2: #6b6250;
+  --color-sigil-3: #7c4c17;
+  --color-sigil-4: #435046;
+  --color-sigil-5: #97341f;
+
+  --shadow-raised: 0 1px 2px #2a231414, 0 2px 8px #2a23140f;
+  --shadow-window:
+    0 0 0 1px #2a231414, 0 8px 16px -8px #2a231426, 0 24px 56px -12px #2a231426;
+  --shadow-window-focused:
+    0 0 0 1px #2a231426, 0 12px 24px -8px #2a231433, 0 36px 80px -16px #2a231438;
+  --shadow-dock: 0 0 0 1px #2a231414, 0 12px 32px -8px #2a231426;
+
+  --glow-soft: 0 0 14px -6px color-mix(in oklab, var(--color-accent) 40%, transparent);
+  --glow-strong: 0 0 22px -4px color-mix(in oklab, var(--color-accent) 50%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Акценты
+
+   Каждый акцент объявляет пару вариантов — для тёмной и светлой темы, — а тема
+   выбирает нужный. Так не нужны селекторы «тема × акцент» и споры специфичности.
+   Все варианты приглушённые: акцент подсвечивает интерфейс, а не кричит из него.
+   -------------------------------------------------------------------------- */
+
+[data-accent='ember'] {
+  --accent-dark: #c8a44e;
+  --accent-dark-bright: #e8c987;
+  --accent-dark-dim: #82652d;
+  --accent-light: #7d5a17;
+  --accent-light-bright: #634611;
+  --accent-light-dim: #bda068;
+}
+
+[data-accent='moss'] {
+  --accent-dark: #93a468;
+  --accent-dark-bright: #b0bf87;
+  --accent-dark-dim: #5c6740;
+  --accent-light: #4c5c27;
+  --accent-light-bright: #3b481d;
+  --accent-light-dim: #98a678;
+}
+
+[data-accent='tide'] {
+  --accent-dark: #7d9fc0;
+  --accent-dark-bright: #9fbcd6;
+  --accent-dark-dim: #4c6379;
+  --accent-light: #2d5f80;
+  --accent-light-bright: #234c68;
+  --accent-light-dim: #82a2ba;
+}
+
+[data-accent='plum'] {
+  --accent-dark: #a98bb5;
+  --accent-dark-bright: #c4a8cd;
+  --accent-dark-dim: #6b5674;
+  --accent-light: #6f4d7c;
+  --accent-light-bright: #5a3e64;
+  --accent-light-dim: #a992b1;
+}
+
+[data-accent='stone'] {
+  --accent-dark: #a9a396;
+  --accent-dark-bright: #c6c0b3;
+  --accent-dark-dim: #6c675c;
+  --accent-light: #57513f;
+  --accent-light-bright: #453f31;
+  --accent-light-dim: #9d9788;
+}
+
+/* Образец акцента внутри интерфейса: тот же набор переменных, что и у корня,
+   поэтому палитра нигде не дублируется. */
+:root[data-theme='dark'] [data-accent] {
+  --swatch: var(--accent-dark);
+}
+
+:root[data-theme='light'] [data-accent] {
+  --swatch: var(--accent-light);
+}
+
+:root[data-theme='dark'] {
+  --color-accent: var(--accent-dark, #c8a44e);
+  --color-accent-bright: var(--accent-dark-bright, #e8c987);
+  --color-accent-dim: var(--accent-dark-dim, #82652d);
+  --color-accent-wash: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+:root[data-theme='light'] {
+  --color-accent: var(--accent-light, #7d5a17);
+  --color-accent-bright: var(--accent-light-bright, #634611);
+  --color-accent-dim: var(--accent-light-dim, #bda068);
+  --color-accent-wash: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Повышенный контраст
+   -------------------------------------------------------------------------- */
+
+:root[data-theme='dark'][data-contrast='high'] {
+  --color-line-subtle: #e8d9b52e;
+  --color-line: #e8d9b547;
+  --color-line-strong: #e8d9b56b;
+  --color-ink-muted: #ddd3bf;
+  --color-ink-faint: #c0b6a1;
+  --color-surface-1: #100e0c;
+  --color-surface-2: #191613;
+}
+
+:root[data-theme='light'][data-contrast='high'] {
+  --color-line-subtle: #2a231433;
+  --color-line: #2a231459;
+  --color-line-strong: #2a231480;
+  --color-ink-muted: #2a2419;
+  --color-ink-faint: #443c2e;
+  --color-surface-1: #fffdf8;
+  --color-surface-2: #fffdf8;
+}
+
+/* --------------------------------------------------------------------------
+   Прозрачность
+   -------------------------------------------------------------------------- */
+
+:root[data-transparency='reduced'] {
+  --glass-blur: 10px;
+  --glass-blur-strong: 16px;
+  --glass-blur-soft: 2px;
+
+  --color-glass-window: color-mix(in oklab, var(--color-surface-1) 98%, transparent);
+  --color-glass-dock: color-mix(in oklab, var(--color-surface-1) 88%, transparent);
+  --color-glass-menubar: color-mix(in oklab, var(--color-surface-0) 92%, transparent);
+  --color-glass-scrim: color-mix(in oklab, var(--color-void) 75%, transparent);
+  --color-glass-terminal: color-mix(in oklab, var(--color-void) 88%, transparent);
+  --color-glass-hud: color-mix(in oklab, var(--color-surface-1) 74%, transparent);
+}
+
+:root[data-transparency='off'] {
+  --glass-blur: 0px;
+  --glass-blur-strong: 0px;
+  --glass-blur-soft: 0px;
+
+  --color-glass-window: var(--color-surface-1);
+  --color-glass-dock: var(--color-surface-1);
+  --color-glass-menubar: var(--color-surface-0);
+  --color-glass-scrim: var(--color-void);
+  --color-glass-terminal: var(--color-void);
+  --color-glass-hud: var(--color-surface-1);
+}
+
+/* --------------------------------------------------------------------------
+   Плотность интерфейса
+   -------------------------------------------------------------------------- */
+
+:root[data-density='compact'] {
+  --titlebar-height: 2.25rem;
+  --app-pad-x: 1.125rem;
+  --app-pad-y: 1.125rem;
+  --app-pad-x-wide: 1.5rem;
+  --app-pad-y-wide: 1.25rem;
+  --dock-padding: 0.375rem;
+  --dock-gap: 0.125rem;
+}
+
+/* --------------------------------------------------------------------------
+   Размер текста
+   -------------------------------------------------------------------------- */
+
+:root[data-text-scale='large'] {
+  font-size: 106.25%;
+}
+
+:root[data-text-scale='larger'] {
+  font-size: 112.5%;
+}
+
+/* --------------------------------------------------------------------------
+   Движение
+
+   Уровень движения приходит уже разрешённым: если система просит уменьшить
+   анимации, `full` до атрибута не доходит. Медиазапрос ниже остаётся запасным
+   путём — для случая, когда скрипт настроек не отработал.
+   -------------------------------------------------------------------------- */
+
+:root[data-motion='reduced'] {
+  --duration-instant: 60ms;
+  --duration-fast: 90ms;
+  --duration-base: 120ms;
+  --duration-slow: 150ms;
+  --duration-cinematic: 200ms;
+}
+
+:root[data-motion='off'] {
+  --duration-instant: 1ms;
+  --duration-fast: 1ms;
+  --duration-base: 1ms;
+  --duration-slow: 1ms;
+  --duration-cinematic: 1ms;
+}
+
+:root[data-motion='off'] *,
+:root[data-motion='off'] *::before,
+:root[data-motion='off'] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion]) {
+    --duration-instant: 1ms;
+    --duration-fast: 1ms;
+    --duration-base: 1ms;
+    --duration-slow: 1ms;
+    --duration-cinematic: 1ms;
+  }
+
+  :root:not([data-motion]) *,
+  :root:not([data-motion]) *::before,
+  :root:not([data-motion]) *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Фоновое движение — туман и дыхание свечения — идёт бесконечным циклом, и
+   ему мало ускорения: при просьбе о покое оно должно остановиться совсем.
+   Помечается атрибутом `data-ambient`, гасится тремя правилами ниже. */
+:root[data-motion='reduced'] [data-ambient],
+:root[data-motion='off'] [data-ambient] {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion]) [data-ambient] {
+    animation: none !important;
+  }
+}
+
+/* Подъём элемента под курсором — единственный эффект наведения, который
+   выключается. Смена цвета остаётся: это обратная связь, а не украшение.
+   Масштаб не трогаем: увеличение иконок дока — отдельная настройка. */
+:root[data-hover='off'] [data-hover-lift] {
+  translate: none;
+}
+
+/* --------------------------------------------------------------------------
+   Тени окон
+   -------------------------------------------------------------------------- */
+
+:root[data-shadows='off'] {
+  --shadow-raised: none;
+  --shadow-window: 0 0 0 1px var(--color-line);
+  --shadow-window-focused: 0 0 0 1px var(--color-line-strong);
+  --shadow-dock: 0 0 0 1px var(--color-line);
+}

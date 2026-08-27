@@ -284,6 +284,51 @@ export const ru = deepFreeze({
   'arcade.board.retry': 'Повторить',
   'arcade.board.volatile':
     'Хранилище не подключено — таблица обнулится при перезапуске',
+
+  'experience.openMap': 'Открыть карту',
+
+  'world.state.soon': 'Трёхмерный мир в разработке — пока план сверху',
+  'world.state.motionOff': 'Трёхмерный мир выключен настройкой движения',
+  'world.state.smallScreen': 'Трёхмерный мир доступен на широком экране',
+  'world.state.noWebgl': 'Браузер не поддерживает WebGL2',
+  'world.state.lowMemory': 'Для трёхмерного мира не хватает памяти устройства',
+
+  'world.loading': 'Загружаю мир',
+  'world.controls.label': 'Управление камерой',
+  'world.controls.orbit': 'Орбита',
+  'world.controls.fps': 'От первого лица',
+  'world.controls.skip': 'Пропустить',
+  'world.steps.label': 'Шаги по миру',
+  'world.steps.back': 'Назад',
+  'world.steps.next': 'Дальше',
+  'world.steps.hint': 'Перетащите — осмотреться с места',
+  'world.steps.toPath': 'На путь',
+  'world.menu.label': 'Меню',
+  'world.menu.guide': 'Как здесь всё устроено',
+  'world.book.label': 'Книга-резюме',
+  'world.book.open': 'Открыть резюме',
+  'world.book.close': 'Убрать книгу',
+  'world.book.previous': 'Предыдущий разворот',
+  'world.book.next': 'Следующий разворот',
+  'world.book.position': 'Разворот',
+  'world.book.contents': 'Содержание книги-резюме',
+  'world.book.guide.book.title': 'Книга',
+  'world.book.guide.book.1': 'Щелчок по правой странице листает вперёд, по левой — назад.',
+  'world.book.guide.book.2': 'На этом развороте щелчок по левой странице закрывает книгу.',
+  'world.book.guide.book.3': 'Закладка со знаком вопроса возвращает сюда с любой страницы.',
+  'world.book.guide.book.4':
+    'Закрытый том можно повертеть протяжкой, а с зажатым Shift — переставить в кадре.',
+  'world.book.guide.book.5':
+    'Подчёркнутая строка — ссылка: щелчок открывает её в новой вкладке.',
+  'world.book.guide.world.title': 'Мир',
+  'world.book.guide.world.1': 'Полоса внизу ведёт по местам работы: «Назад» и «Дальше».',
+  'world.book.guide.world.2': 'Протяжка по миру осматривается с места.',
+  'world.book.guide.world.3':
+    'Орбита — камера ходит вокруг точки; от первого лица — WASD или стрелки.',
+  'world.book.guide.world.4': 'Колесо приближает и отдаляет.',
+  'world.screen.title': 'Карта карьеры',
+  'world.screen.subtitle': 'Места работы точками, проекты рядом с ними, непройденная вершина впереди.',
+  'world.screen.back': 'На рабочий стол',
 } as const);
 
 export type TranslationKey = keyof typeof ru;

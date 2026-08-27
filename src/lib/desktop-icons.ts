@@ -103,6 +103,54 @@ export function clampIconPosition(
 }
 
 /**
+ * Сдвигает группу ярлыков на общее смещение: привязка к сетке и границы
+ * рабочей области. Общий шаг для перетаскивания и для стрелок — разница между
+ * ними только в источнике смещения.
+ */
+export function shiftPositions(
+  starts: IconPositions,
+  delta: { dx: number; dy: number },
+  workspace: Workspace,
+  metrics: IconMetrics,
+): IconPositions {
+  const next: IconPositions = {};
+  for (const [key, start] of Object.entries(starts)) {
+    next[key] = clampIconPosition(
+      { x: snapToGrid(start.x + delta.dx), y: snapToGrid(start.y + delta.dy) },
+      workspace,
+      metrics,
+    );
+  }
+  return next;
+}
+
+/** Префикс ключа: у программ ключ — их идентификатор, у файлов — с префиксом. */
+const FILE_KEY_PREFIX = 'file:';
+
+/**
+ * Ключ позиции ярлыка файла. У программ это их идентификатор — так сохранённые
+ * раскладки переживают появление файлов.
+ */
+export function fileKey(id: string): string {
+  return `${FILE_KEY_PREFIX}${id}`;
+}
+
+/** Идентификатор файла из ключа ярлыка. Ярлык программы — не файл. */
+export function fileIdOf(key: string): string | null {
+  return key.startsWith(FILE_KEY_PREFIX) ? key.slice(FILE_KEY_PREFIX.length) : null;
+}
+
+/** Только файлы группы: ярлыки программ нельзя ни удалить, ни перенести. */
+export function fileIdsOf(keys: Iterable<string>): string[] {
+  const ids: string[] = [];
+  for (const key of keys) {
+    const id = fileIdOf(key);
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+/**
  * Позиция для автоматической раскладки: в границах рабочей области и вне зоны
  * Hero. Только для расчёта раскладки по умолчанию — там ярлык ставит программа,
  * и накрывать им заголовок нельзя.

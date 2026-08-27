@@ -262,6 +262,8 @@ export function WindowManagerProvider({
 
   const cancelClose = useCallback(() => setPendingCloseId(null), []);
 
+  // Значение контекста собирается мемоизированным, а действия — стабильными:
+  // без этого любой рендер провайдера перерисовывал бы все открытые окна.
   const value = useMemo<WindowManagerContextValue>(
     () => ({
       state,

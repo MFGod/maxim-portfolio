@@ -1,128 +1,17 @@
 'use client';
 
-import { Folder, NotepadText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { IconBadge } from '@/components/ui/icon-badge';
 import type { IconComponent } from '@/components/ui/icons';
-import { applications, type AppId } from '@/data/applications';
 import { SELECT_KEY_ATTRIBUTE } from '@/hooks/use-marquee';
 import { cn } from '@/lib/cn';
+import type { BrowserItem } from '@/lib/files/browser-items';
 import { fileStore } from '@/lib/files/store';
 import { splitName } from '@/lib/files/tree';
 import type { FileNode } from '@/lib/files/types';
 
-/** Формат MIME для переноса внутри окна. Своё имя — чтобы не ловить чужие данные. */
-export const DRAG_TYPE = 'application/x-desktop-file';
-
-/** Модификаторы, при которых клик добавляет к выделению, а не заменяет его. */
-export type Modifiers = Pick<React.MouseEvent, 'ctrlKey' | 'metaKey' | 'shiftKey'>;
-
-/**
- * Объект списка. Ярлык программы и файл ведут себя по-разному (ярлык нельзя
- * ни переименовать, ни удалить), но выделяются, рисуются и открываются они
- * одинаково — поэтому у режимов отображения один тип на оба случая.
- */
-export type BrowserItem =
-  | { key: string; kind: 'app'; app: AppId; name: string }
-  | { key: string; kind: 'file'; node: FileNode; name: string };
-
-/** Группа объектов с заголовком. Пустой заголовок — группировка выключена. */
-export type ItemGroup = { id: string; title: string; items: BrowserItem[] };
-
-/**
- * Всё, что режиму отображения нужно знать о состоянии и уметь сообщить наружу.
- * Логика выделения, буфера и меню живёт в `FileBrowser`: режимы отвечают только
- * за раскладку.
- */
-export type ItemView = {
-  /** Плоский список в порядке чтения: лента галереи и панели колонок. */
-  items: BrowserItem[];
-  /** Тот же список, разложенный по группам: режимы значков и списка. */
-  groups: ItemGroup[];
-  selected: ReadonlySet<string>;
-  /** Идентификаторы вырезанных файлов: рисуются приглушённо. */
-  cutIds: readonly string[];
-  dropTargetId: string | null;
-  renamingId: string | null;
-  /** Что поедет за курсором, если тянуть этот объект. */
-  dragIdsFor: (key: string) => string[];
-  onSelect: (key: string, modifiers: Modifiers) => void;
-  onSelectOnly: (key: string) => void;
-  onOpen: (item: BrowserItem) => void;
-  onMenu: (item: BrowserItem, event: React.MouseEvent) => void;
-  onDropTarget: (id: string | null) => void;
-  onRenameEnd: () => void;
-};
-
-export function iconFor(item: BrowserItem): IconComponent {
-  if (item.kind === 'app') return applications[item.app].icon;
-  return item.node.kind === 'folder' ? Folder : NotepadText;
-}
-
-/** Папка — единственный приёмник для переноса. */
-function folderIdOf(item: BrowserItem): string | null {
-  return item.kind === 'file' && item.node.kind === 'folder' ? item.node.id : null;
-}
-
-/**
- * Список идентификаторов из `dataTransfer`. Данные кладёт то же приложение, но
- * приходят они через браузер — разбираем как внешние.
- */
-export function readDragIds(raw: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((id): id is string => typeof id === 'string');
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Обработчики переноса мышью. Одни и те же в плитке и в строке: тянуть и
- * принимать умеют оба режима.
- */
-function dragProps(item: BrowserItem, view: ItemView) {
-  const folderId = folderIdOf(item);
-
-  return {
-    draggable: item.kind === 'file',
-    onDragStart: (event: React.DragEvent) => {
-      // Перетаскивание не даёт клика: выделить объект нужно здесь.
-      if (!view.selected.has(item.key)) view.onSelectOnly(item.key);
-      event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(view.dragIdsFor(item.key)));
-      event.dataTransfer.effectAllowed = 'move';
-    },
-    onDragOver: (event: React.DragEvent) => {
-      if (!folderId) return;
-      if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      view.onDropTarget(folderId);
-    },
-    onDragLeave: () => view.onDropTarget(null),
-    onDrop: (event: React.DragEvent) => {
-      if (!folderId) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const ids = readDragIds(event.dataTransfer.getData(DRAG_TYPE));
-      if (ids.length > 0) fileStore.moveMany(ids, folderId);
-      view.onDropTarget(null);
-    },
-  };
-}
-
-/** Состояния оформления, общие для плитки и строки. */
-function stateClasses(item: BrowserItem, view: ItemView) {
-  const selected = view.selected.has(item.key);
-  // Приёмник — только папка: у файла и ярлыка `folderIdOf` даёт `null`, и без
-  // явной проверки они совпали бы с пустым `dropTargetId`.
-  const folderId = folderIdOf(item);
-  const dropTarget = folderId !== null && folderId === view.dropTargetId;
-  const cut = item.kind === 'file' && view.cutIds.includes(item.node.id);
-  return { selected, dropTarget, cut };
-}
+import { dragProps, iconFor, stateClasses, type ItemView } from './shared';
 
 /**
  * Квадратная плитка: режим значков и лента галереи. Габарит приходит из

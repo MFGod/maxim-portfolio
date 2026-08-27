@@ -3,9 +3,8 @@
 import {
   SegmentedControl,
   SettingRow,
-  SwatchPicker,
-  TilePicker,
 } from '@/components/applications/settings/controls';
+import { SwatchPicker, TilePicker } from '@/components/applications/settings/pickers';
 import {
   ACCENTS,
   DENSITIES,

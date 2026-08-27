@@ -1,7 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
-
 import { useSetting } from '@/lib/settings/hooks';
 import type { Locale } from '@/lib/settings/types';
 
@@ -24,7 +22,7 @@ export function translator(locale: Locale): Translate {
  */
 export function useTranslate(): Translate {
   const locale = useSetting((settings) => settings.language);
-  return useMemo(() => translator(locale), [locale]);
+  return translator(locale);
 }
 
 export { dictionaries, type Dictionary, type TranslationKey };

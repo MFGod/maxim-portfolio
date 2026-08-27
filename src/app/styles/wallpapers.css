@@ -1,0 +1,168 @@
+/* --------------------------------------------------------------------------
+   Обои
+
+   Каждый вариант — это набор слоёв в переменных. Компонент рисует одни и те же
+   шесть слоёв, а тема и вариант решают, чем их залить. Слои тумана и зерна
+   выключаются нулевой прозрачностью, а не отдельной веткой в разметке.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --wp-base: radial-gradient(
+    125% 95% at 50% -15%,
+    #241d14 0%,
+    #120f0c 45%,
+    #0a0806 100%
+  );
+  --wp-grid-color: #e8d9b5;
+  --wp-grid-opacity: 0.04;
+  /* Свет с верхнего края — то самое золотое зарево над горизонтом. */
+  --wp-rays: radial-gradient(
+    70% 45% at 50% 0%,
+    color-mix(in oklab, var(--color-accent) 14%, transparent) 0%,
+    transparent 70%
+  );
+  --wp-fog:
+    radial-gradient(45% 30% at 20% 78%, #e8d9b512 0%, transparent 70%),
+    radial-gradient(50% 32% at 82% 88%, #c8a44e10 0%, transparent 72%);
+  --wp-fog-opacity: 1;
+  --wp-noise-opacity: 0.035;
+  --wp-glow: linear-gradient(to top, var(--color-accent-wash), transparent);
+  --wp-vignette: radial-gradient(100% 100% at 50% 50%, transparent 52%, #000000b3 100%);
+}
+
+/* Вариант по умолчанию повторён явно: превью-плитка внутри Settings иначе
+   унаследовала бы значения текущих обоев, а не своего варианта. */
+[data-wallpaper='default'] {
+  --wp-base: radial-gradient(
+    125% 95% at 50% -15%,
+    #241d14 0%,
+    #120f0c 45%,
+    #0a0806 100%
+  );
+  --wp-grid-color: #e8d9b5;
+  --wp-grid-opacity: 0.04;
+  --wp-rays: radial-gradient(
+    70% 45% at 50% 0%,
+    color-mix(in oklab, var(--color-accent) 14%, transparent) 0%,
+    transparent 70%
+  );
+  --wp-fog:
+    radial-gradient(45% 30% at 20% 78%, #e8d9b512 0%, transparent 70%),
+    radial-gradient(50% 32% at 82% 88%, #c8a44e10 0%, transparent 72%);
+  --wp-fog-opacity: 1;
+  --wp-noise-opacity: 0.035;
+  --wp-glow: linear-gradient(to top, var(--color-accent-wash), transparent);
+  --wp-vignette: radial-gradient(100% 100% at 50% 50%, transparent 52%, #000000b3 100%);
+}
+
+[data-wallpaper='minimal'] {
+  --wp-base: linear-gradient(to bottom, #131110, #0c0a08);
+  --wp-grid-opacity: 0;
+  --wp-rays: none;
+  --wp-fog-opacity: 0;
+  --wp-noise-opacity: 0.02;
+  --wp-glow: none;
+  --wp-vignette: none;
+}
+
+[data-wallpaper='deep'] {
+  --wp-base: radial-gradient(140% 100% at 50% 0%, #17130f 0%, #080705 60%);
+  --wp-grid-opacity: 0;
+  --wp-rays: none;
+  --wp-fog-opacity: 0.6;
+  --wp-noise-opacity: 0.04;
+  --wp-glow: none;
+  --wp-vignette: radial-gradient(100% 100% at 50% 45%, transparent 38%, #000000d9 100%);
+}
+
+[data-wallpaper='gradient'] {
+  --wp-base:
+    radial-gradient(90% 70% at 15% 0%, var(--color-accent-wash) 0%, transparent 60%),
+    radial-gradient(80% 80% at 85% 100%, #2a2118 0%, transparent 65%),
+    linear-gradient(160deg, #1a1510 0%, #0a0806 100%);
+  --wp-grid-opacity: 0;
+  --wp-rays: none;
+  --wp-fog-opacity: 1;
+  --wp-noise-opacity: 0.03;
+  --wp-glow: none;
+  --wp-vignette: radial-gradient(100% 100% at 50% 50%, transparent 58%, #000000a6 100%);
+}
+
+:root[data-theme='light'] {
+  --wp-base: radial-gradient(
+    120% 90% at 50% -10%,
+    #f6efdd 0%,
+    #ebe3d1 45%,
+    #e4dccb 100%
+  );
+  --wp-grid-color: #2a2314;
+  --wp-grid-opacity: 0.04;
+  --wp-rays: radial-gradient(
+    70% 45% at 50% 0%,
+    color-mix(in oklab, var(--color-accent) 8%, transparent) 0%,
+    transparent 70%
+  );
+  --wp-fog: radial-gradient(50% 34% at 22% 80%, #ffffff80 0%, transparent 72%);
+  --wp-fog-opacity: 1;
+  --wp-noise-opacity: 0.02;
+  --wp-glow: linear-gradient(to top, var(--color-accent-wash), transparent);
+  --wp-vignette: radial-gradient(100% 100% at 50% 50%, transparent 60%, #2a231421 100%);
+}
+
+:root[data-theme='light'][data-wallpaper='default'],
+:root[data-theme='light'] [data-wallpaper='default'] {
+  --wp-base: radial-gradient(
+    120% 90% at 50% -10%,
+    #f6efdd 0%,
+    #ebe3d1 45%,
+    #e4dccb 100%
+  );
+  --wp-grid-color: #2a2314;
+  --wp-grid-opacity: 0.04;
+  --wp-rays: radial-gradient(
+    70% 45% at 50% 0%,
+    color-mix(in oklab, var(--color-accent) 8%, transparent) 0%,
+    transparent 70%
+  );
+  --wp-fog: radial-gradient(50% 34% at 22% 80%, #ffffff80 0%, transparent 72%);
+  --wp-fog-opacity: 1;
+  --wp-noise-opacity: 0.02;
+  --wp-glow: linear-gradient(to top, var(--color-accent-wash), transparent);
+  --wp-vignette: radial-gradient(100% 100% at 50% 50%, transparent 60%, #2a231421 100%);
+}
+
+:root[data-theme='light'][data-wallpaper='minimal'],
+:root[data-theme='light'] [data-wallpaper='minimal'] {
+  --wp-base: linear-gradient(to bottom, #f2ecdd, #e9e1d0);
+  --wp-grid-opacity: 0;
+  --wp-rays: none;
+  --wp-fog-opacity: 0;
+  --wp-noise-opacity: 0.015;
+  --wp-glow: none;
+  --wp-vignette: none;
+}
+
+:root[data-theme='light'][data-wallpaper='deep'],
+:root[data-theme='light'] [data-wallpaper='deep'] {
+  --wp-base: radial-gradient(140% 100% at 50% 0%, #e0d6bf 0%, #d3c8ad 60%);
+  --wp-grid-opacity: 0;
+  --wp-rays: none;
+  --wp-fog-opacity: 0.5;
+  --wp-noise-opacity: 0.02;
+  --wp-glow: none;
+  --wp-vignette: radial-gradient(100% 100% at 50% 45%, transparent 40%, #2a231433 100%);
+}
+
+:root[data-theme='light'][data-wallpaper='gradient'],
+:root[data-theme='light'] [data-wallpaper='gradient'] {
+  --wp-base:
+    radial-gradient(90% 70% at 15% 0%, var(--color-accent-wash) 0%, transparent 60%),
+    radial-gradient(80% 80% at 85% 100%, #e8dcc2 0%, transparent 65%),
+    linear-gradient(160deg, #f7f1e2 0%, #e3dbc9 100%);
+  --wp-grid-opacity: 0;
+  --wp-rays: none;
+  --wp-fog-opacity: 1;
+  --wp-noise-opacity: 0.015;
+  --wp-glow: none;
+  --wp-vignette: radial-gradient(100% 100% at 50% 50%, transparent 60%, #2a231417 100%);
+}

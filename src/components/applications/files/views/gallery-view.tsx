@@ -6,7 +6,8 @@ import { childrenOf } from '@/lib/files/tree';
 import type { FileTree } from '@/lib/files/types';
 import { formatCount, formatTimestamp } from '@/lib/format';
 
-import { ItemTile, iconFor, type BrowserItem, type ItemView } from './shared';
+import { ItemTile } from './items';
+import { iconFor, type BrowserItem, type ItemView } from './shared';
 
 /** Сколько текста показывать в предпросмотре. Дальше — открывать в редакторе. */
 const PREVIEW_LIMIT = 1200;

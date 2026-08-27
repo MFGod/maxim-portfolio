@@ -1,7 +1,7 @@
 'use client';
 
 import { useReducedMotion } from 'motion/react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import {
   techCategoryLabels,
@@ -14,6 +14,18 @@ import { cn } from '@/lib/cn';
 import { useSetting } from '@/lib/settings';
 
 import { TechGraph } from './tech-graph';
+
+/** Навыки по разделам. Набор статичен — считается один раз на модуль. */
+const groupedSkills = (() => {
+  const map = new Map<TechCategory, string[]>();
+  for (const node of techNodes) {
+    if (!node.category) continue;
+    const items = map.get(node.category);
+    if (items) items.push(node.label);
+    else map.set(node.category, [node.label]);
+  }
+  return [...map.entries()];
+})();
 
 const HINTS = [
   'Нажмите на узел — увидите его связи',
@@ -28,23 +40,11 @@ export function SkillsApp() {
   const systemReduceMotion = useReducedMotion();
   const animated = animationLevel !== 'off' && !systemReduceMotion;
 
-  const grouped = useMemo(() => {
-    const map = new Map<TechCategory, string[]>();
-    for (const node of techNodes) {
-      if (!node.category) continue;
-      const items = map.get(node.category);
-      if (items) items.push(node.label);
-      else map.set(node.category, [node.label]);
-    }
-    return [...map.entries()];
-  }, []);
-
-  const links = useMemo(() => {
-    if (!selectedId) return [];
-    return techEdges
-      .filter((edge) => edge.source === selectedId || edge.target === selectedId)
-      .map((edge) => (edge.source === selectedId ? edge.target : edge.source));
-  }, [selectedId]);
+  const links = selectedId
+    ? techEdges
+        .filter((edge) => edge.source === selectedId || edge.target === selectedId)
+        .map((edge) => (edge.source === selectedId ? edge.target : edge.source))
+    : [];
 
   const selected = selectedId ? techNodeById.get(selectedId) : null;
 
@@ -106,7 +106,7 @@ export function SkillsApp() {
           Весь стек по категориям
         </h3>
         <dl className="mt-2 space-y-2">
-          {grouped.map(([category, items]) => (
+          {groupedSkills.map(([category, items]) => (
             <div key={category}>
               <dt className="text-2xs text-ink-faint font-mono tracking-wide uppercase">
                 {techCategoryLabels[category]}

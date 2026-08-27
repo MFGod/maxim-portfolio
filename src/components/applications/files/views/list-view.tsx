@@ -4,7 +4,8 @@ import { childrenOf } from '@/lib/files/tree';
 import type { FileTree } from '@/lib/files/types';
 import { formatCount, formatTimestamp } from '@/lib/format';
 
-import { GroupTitle, ItemRow, type BrowserItem, type ItemView } from './shared';
+import { GroupTitle, ItemRow } from './items';
+import { type BrowserItem, type ItemView } from './shared';
 
 /** Что за объект: колонка «Тип» повторяет то, что видно по значку, словами. */
 function typeLabel(item: BrowserItem): string {

@@ -3,11 +3,8 @@
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
-import {
-  SettingRow,
-  Slider,
-  Toggle,
-} from '@/components/applications/settings/controls';
+import { SettingRow, Toggle } from '@/components/applications/settings/controls';
+import { Slider } from '@/components/applications/settings/pickers';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { fileStore, useFiles } from '@/lib/files/store';
 import { DOCK_SIZE } from '@/lib/settings/types';

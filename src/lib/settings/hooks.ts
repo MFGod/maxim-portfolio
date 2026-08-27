@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { DEFAULT_SETTINGS } from './defaults';
 import { settingsStore } from './store';
@@ -22,7 +22,11 @@ export function useSettings(): Settings {
 export function useSetting<T extends string | number | boolean>(
   select: (settings: Settings) => T,
 ): T {
-  const getSnapshot = useCallback(() => select(settingsStore.getSnapshot()), [select]);
-  const getServerSnapshot = useCallback(() => select(DEFAULT_SETTINGS), [select]);
-  return useSyncExternalStore(settingsStore.subscribe, getSnapshot, getServerSnapshot);
+  // Мемоизация здесь была бы пустой: селектор приходит новой стрелкой на каждом
+  // рендере, а `useSyncExternalStore` и так зовёт снимок при каждом рендере.
+  return useSyncExternalStore(
+    settingsStore.subscribe,
+    () => select(settingsStore.getSnapshot()),
+    () => select(DEFAULT_SETTINGS),
+  );
 }

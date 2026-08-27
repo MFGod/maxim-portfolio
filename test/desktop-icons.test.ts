@@ -3,11 +3,15 @@ import { describe, expect, it } from 'vitest';
 import {
   clampIconPosition,
   defaultPositions,
+  fileIdOf,
+  fileIdsOf,
+  fileKey,
   iconMetrics,
   iconsInRect,
   parseStoredPositions,
   resolvePositions,
   layoutIconPosition,
+  shiftPositions,
   snapToGrid,
 } from '@/lib/desktop-icons';
 import type { Workspace } from '@/lib/window-manager/types';
@@ -184,5 +188,41 @@ describe('iconsInRect', () => {
   it('ярлыки без позиции пропускаются', () => {
     const rect = { x: 0, y: 0, width: 500, height: 500 };
     expect(iconsInRect(positions, [...keys, 'unknown'], rect, metrics)).toEqual(keys);
+  });
+});
+
+describe('shiftPositions', () => {
+  it('двигает всю группу на общее смещение с привязкой к сетке', () => {
+    const starts = { a: { x: 12, y: 42 }, b: { x: 12, y: 130 } };
+    const moved = shiftPositions(starts, { dx: 25, dy: 0 }, workspace, metrics);
+    expect(moved['a']).toEqual({ x: 36, y: 48 });
+    expect(moved['b']).toEqual({ x: 36, y: 132 });
+  });
+
+  it('не выпускает ярлык за границы рабочей области', () => {
+    const starts = { a: { x: 12, y: 42 } };
+    const moved = shiftPositions(starts, { dx: -500, dy: -500 }, workspace, metrics);
+    expect(moved['a']).toEqual({ x: workspace.x, y: workspace.y });
+  });
+
+  it('на пустой группе возвращает пустую раскладку', () => {
+    expect(shiftPositions({}, { dx: 10, dy: 10 }, workspace, metrics)).toEqual({});
+  });
+});
+
+describe('ключи ярлыков', () => {
+  it('файловый ключ разбирается обратно в идентификатор', () => {
+    expect(fileIdOf(fileKey('node-1'))).toBe('node-1');
+  });
+
+  it('ярлык программы файлом не считается', () => {
+    expect(fileIdOf('resume')).toBeNull();
+  });
+
+  it('из смешанной группы берёт только файлы', () => {
+    expect(fileIdsOf(['resume', fileKey('a'), 'projects', fileKey('b')])).toEqual([
+      'a',
+      'b',
+    ]);
   });
 });

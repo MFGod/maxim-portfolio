@@ -176,26 +176,23 @@ function useDockMagnify(
 
   useEffect(() => reset, [reset]);
 
-  const onPointerMove = useCallback(
-    (event: React.PointerEvent<HTMLUListElement>) => {
-      if (!enabled) return;
-      const list = ref.current;
-      if (!list) return;
+  const onPointerMove = (event: React.PointerEvent<HTMLUListElement>) => {
+    if (!enabled) return;
+    const list = ref.current;
+    if (!list) return;
 
-      const pointerX = event.clientX;
-      cancelAnimationFrame(frameRef.current);
-      frameRef.current = requestAnimationFrame(() => {
-        const items = list.querySelectorAll<HTMLElement>('[data-hover-lift]');
-        items.forEach((item) => {
-          const box = item.getBoundingClientRect();
-          const distance = Math.abs(pointerX - (box.left + box.width / 2));
-          const falloff = Math.max(0, 1 - distance / MAGNIFY_RADIUS);
-          item.style.setProperty('--magnify', String(1 + MAGNIFY_GAIN * falloff));
-        });
+    const pointerX = event.clientX;
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(() => {
+      const items = list.querySelectorAll<HTMLElement>('[data-hover-lift]');
+      items.forEach((item) => {
+        const box = item.getBoundingClientRect();
+        const distance = Math.abs(pointerX - (box.left + box.width / 2));
+        const falloff = Math.max(0, 1 - distance / MAGNIFY_RADIUS);
+        item.style.setProperty('--magnify', String(1 + MAGNIFY_GAIN * falloff));
       });
-    },
-    [enabled, ref],
-  );
+    });
+  };
 
   return { onPointerMove, onPointerLeave: reset };
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, Copy, Download } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { contactIcon, contactLinkTarget } from '@/components/ui/contact-links';
 import { AppBody } from '@/components/ui/primitives';
@@ -99,12 +99,12 @@ function CopyButton({ value, label }: { value: string; label: string }) {
     return () => window.clearTimeout(timer);
   }, [copied]);
 
-  const copy = useCallback(async () => {
+  const copy = async () => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
     } catch {}
-  }, [value]);
+  };
 
   return (
     <button
