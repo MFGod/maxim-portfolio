@@ -69,6 +69,7 @@ import { createBattleTools, type BattleTools } from './dev-battles';
 import { createPatrolTools, type PatrolTools } from './dev-patrols';
 import { createFigures, traceGround } from './figures';
 import { createGuideRay } from './guide-ray';
+import { driftYaw, idlePhase, type IdlePhase } from './idle';
 import { createMarkers } from './markers';
 import { advanceChapter, nextChapter, pathTarget } from './route';
 import {
@@ -104,6 +105,14 @@ export type WorldOptions = {
    * без этого её счётчик показывал бы вход, пока посетитель стоит у Flexy.
    */
   onChapter?: (positionId: string | null) => void;
+  /**
+   * Мир ушёл в облёт или вернулся из него.
+   *
+   * Хранителю экрана нужен пустой кадр: панели поверх ролика читаются
+   * забытым интерфейсом, а не миром. Убирает их интерфейс сам — сцена только
+   * сообщает, что началось.
+   */
+  onRest?: (resting: boolean) => void;
 };
 
 export type World = {
@@ -301,6 +310,7 @@ export function createWorld(
     reducedMotion,
     locale,
     onChapter,
+    onRest,
   } = options;
 
   const manager = new THREE.LoadingManager();
@@ -805,6 +815,65 @@ export function createWorld(
    */
   let passed: string | null = null;
 
+  // --- Покой --------------------------------------------------------------
+
+  /**
+   * Сколько секунд мир не трогали.
+   *
+   * Считается кадрами, а не таймером: замерший мир (`setRunning(false)`) не
+   * должен уходить в облёт, пока его никто не видит — а таймер об этом не
+   * знает.
+   */
+  let idle = 0;
+  let phase: IdlePhase = 'active';
+
+  /** Любое касание возвращает мир посетителю. */
+  const wakeUp = () => {
+    idle = 0;
+    if (phase !== 'rest') return;
+
+    // Облёт забрал камеру — отдаём сразу, не дожидаясь конца перелёта.
+    phase = 'active';
+    rig.cancel();
+    onRest?.(false);
+  };
+
+  for (const event of ['pointerdown', 'wheel', 'keydown'] as const) {
+    // На окне, а не на канвасе: клавиши до канваса не доходят, а колесо над
+    // панелью — это тоже посетитель, а не покой.
+    window.addEventListener(event, wakeUp, { passive: true });
+  }
+
+  /**
+   * Ведёт покой: поворот взгляда, уход в облёт и его продление.
+   *
+   * Просьбу о покое уважаем целиком: при `reducedMotion` мир просто стоит.
+   * Движение без спроса — ровно то, от чего эта настройка защищает.
+   */
+  const advanceIdle = (delta: number) => {
+    if (reducedMotion?.()) return;
+
+    idle += delta;
+    const next = idlePhase(idle);
+
+    if (next === 'drift') rig.nudgeLook(driftYaw(idle, delta));
+
+    if (next === phase) {
+      // Облёт кончился сам, а посетителя всё нет: пускаем следующий круг.
+      if (next === 'rest' && !rig.flying) void rig.fly(restPath(), { freeLook: false });
+      return;
+    }
+
+    phase = next;
+    if (next !== 'rest') return;
+
+    onRest?.(true);
+    void rig.fly(restPath(), { freeLook: false });
+  };
+
+  /** Круг хранителя экрана: тот же путь по главам, что и у пролёта. */
+  const restPath = () => flightPath().map((point) => point.shot);
+
   // --- Фигуры --------------------------------------------------------------
 
   /*
@@ -1040,6 +1109,8 @@ export function createWorld(
     markers.update(camera);
     guideRay.update(camera, nextChapter(passed)?.grace ?? null);
 
+    advanceIdle(delta);
+
     // После рига: книга ставится по камере, а камеру только что подвинули.
     book.update(camera);
     composer.render();
@@ -1091,6 +1162,10 @@ export function createWorld(
      * разом — а лист и его изнанка делят одну геометрию на двоих.
      */
     book.dispose();
+
+    for (const event of ['pointerdown', 'wheel', 'keydown'] as const) {
+      window.removeEventListener(event, wakeUp);
+    }
 
     markers.dispose();
     guideRay.dispose();

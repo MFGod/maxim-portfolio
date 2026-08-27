@@ -27,11 +27,7 @@ import {
   type Point3,
 } from './camera-path';
 import { planFlight } from './flight-plan';
-import {
-  clampCameraToShell,
-  clampMovementToShell,
-  shellHeightAt,
-} from './map-shell';
+import { clampCameraToShell, clampMovementToShell, shellHeightAt } from './map-shell';
 import { obstacleHeightAt } from './obstacles';
 
 export type ControlMode = 'orbit' | 'fps';
@@ -73,6 +69,15 @@ export type CameraRig = {
   setStationLook: (enabled: boolean) => void;
   /** Стоит ли камера в режиме осмотра. */
   readonly stationLook: boolean;
+  /**
+   * Доворачивает взгляд на месте — для покоя мира (`idle.ts`).
+   *
+   * Через риг, а не поворотом камеры снаружи: камера принадлежит ему одному
+   * (D3), и второй хозяин у неё однажды подрался бы с пролётом за тот же кадр.
+   * Работает только в осмотре с места и молчит в остальных режимах: у орбиты
+   * свой угол, а на пролёте камеру ведут опоры.
+   */
+  nudgeLook: (yaw: number) => void;
   setControlMode: (mode: ControlMode) => void;
   setMoveSpeed: (speed: number) => void;
   /** Преграды: купол над рельефом и нижний предел над водой. */
@@ -277,11 +282,7 @@ export function createCameraRig(
   /** Ставит точку взгляда по накопленным углам свободного взгляда. */
   function aimByAngles() {
     const cos = Math.cos(lookPitch);
-    scratch.set(
-      Math.sin(lookYaw) * cos,
-      Math.sin(lookPitch),
-      Math.cos(lookYaw) * cos,
-    );
+    scratch.set(Math.sin(lookYaw) * cos, Math.sin(lookPitch), Math.cos(lookYaw) * cos);
 
     controls.target.copy(camera.position).addScaledVector(scratch, HANDOVER_DISTANCE);
     camera.lookAt(controls.target);
@@ -687,6 +688,11 @@ export function createCameraRig(
       return stationLook;
     },
     cancel,
+    nudgeLook: (yaw: number) => {
+      if (!stationLook || flight) return;
+
+      lookYaw += yaw;
+    },
     setControlMode,
     setMoveSpeed: (speed: number) => {
       moveSpeed = speed;

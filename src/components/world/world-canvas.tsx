@@ -75,6 +75,14 @@ export function WorldCanvas({
   const [station, setStation] = useState(0);
   /** Пройденная глава по счёту мира: её же копит панель навыков. */
   const [passed, setPassed] = useState<string | null>(null);
+  /**
+   * Мир в облёте — хранитель экрана.
+   *
+   * Панели на это время уходят: ролик с забытым интерфейсом поверх читается
+   * не миром, а брошенной вкладкой. Возвращает их любое касание — за этим
+   * следит сцена, она же и сообщает сюда.
+   */
+  const [resting, setResting] = useState(false);
   /** Подсказка про осмотр: гаснет, как только мышь тронула сцену. */
   const [hinted, setHinted] = useState(false);
   /** Раскрыта ли книга-резюме. Само состояние живёт в сцене, здесь — отражение. */
@@ -155,6 +163,7 @@ export function WorldCanvas({
          * «Назад» и «Дальше», — без этого полоса показывала бы вход, пока
          * посетитель стоит у Flexy.
          */
+        onRest: setResting,
         onChapter: (positionId) => {
           if (!positionId) return;
 
@@ -658,9 +667,9 @@ export function WorldCanvas({
         </div>
       ) : null}
 
-      {chrome && ready ? <WorldSkills passed={passed} /> : null}
+      {chrome && ready && !resting ? <WorldSkills passed={passed} /> : null}
 
-      {chrome && ready ? (
+      {chrome && ready && !resting ? (
         <nav
           aria-label={t('world.steps.label')}
           className="border-book-rule bg-glass-book absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-sm border p-1 shadow-sm backdrop-blur-sm"
@@ -707,7 +716,7 @@ export function WorldCanvas({
         </nav>
       ) : null}
 
-      {chrome && ready && !hinted && !flying ? (
+      {chrome && ready && !resting && !hinted && !flying ? (
         <p className="text-2xs text-book-paper pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 font-mono drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
           {t('world.steps.hint')}
         </p>
@@ -771,7 +780,7 @@ export function WorldCanvas({
       {/* Счётчик кадров — только в разработке: в мире он часть отладки, а не кадра. */}
       {process.env.NODE_ENV === 'development' && chrome && ready ? <WorldFps /> : null}
 
-      {chrome && ready ? (
+      {chrome && ready && !resting ? (
         <WorldMenu
           mode={mode}
           onMode={switchMode}
