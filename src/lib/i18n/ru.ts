@@ -303,6 +303,7 @@ export const ru = deepFreeze({
   'world.steps.next': 'Дальше',
   'world.steps.hint': 'Перетащите — осмотреться с места',
   'world.steps.toPath': 'На путь',
+  'world.skills.label': 'Накоплено в пути',
   'world.menu.label': 'Меню',
   'world.menu.guide': 'Как здесь всё устроено',
   'world.book.label': 'Книга-резюме',

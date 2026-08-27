@@ -297,6 +297,7 @@ export const en: Dictionary = deepFreeze({
   'world.steps.next': 'Next',
   'world.steps.hint': 'Drag to look around from here',
   'world.steps.toPath': 'Back to the path',
+  'world.skills.label': 'Picked up along the way',
   'world.menu.label': 'Menu',
   'world.menu.guide': 'How this works',
   'world.book.label': 'Resume book',

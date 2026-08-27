@@ -16,6 +16,7 @@ import type { ControlMode, World } from '@/lib/world/scene';
 import { FigureTuner } from './figure-tuner';
 import { TabTuner } from './tab-tuner';
 import { WorldFps } from './world-fps';
+import { WorldSkills } from './world-skills';
 import { WorldMenu } from './world-menu';
 
 /**
@@ -72,6 +73,8 @@ export function WorldCanvas({
   const [flying, setFlying] = useState(false);
   /** На какой станции стоим. Первая — благодать под Древом, начало пути. */
   const [station, setStation] = useState(0);
+  /** Пройденная глава по счёту мира: её же копит панель навыков. */
+  const [passed, setPassed] = useState<string | null>(null);
   /** Подсказка про осмотр: гаснет, как только мышь тронула сцену. */
   const [hinted, setHinted] = useState(false);
   /** Раскрыта ли книга-резюме. Само состояние живёт в сцене, здесь — отражение. */
@@ -154,6 +157,8 @@ export function WorldCanvas({
          */
         onChapter: (positionId) => {
           if (!positionId) return;
+
+          setPassed(positionId);
 
           const index = stations().findIndex((stop) => stop.positionId === positionId);
           if (index >= 0) setStation(index);
@@ -652,6 +657,8 @@ export function WorldCanvas({
           </div>
         </div>
       ) : null}
+
+      {chrome && ready ? <WorldSkills passed={passed} /> : null}
 
       {chrome && ready ? (
         <nav
