@@ -28,7 +28,7 @@ import { battleView } from '@/lib/world/battle';
 import { worldPatrols, type WorldPatrol } from '@/data/world-patrols';
 import { zoneOf, type WorldShot } from '@/data/world-shots';
 import type { WorldBattle } from '@/lib/world/battle';
-import type { Locale } from '@/lib/settings/types';
+import type { Locale, ResolvedTheme } from '@/lib/settings/types';
 
 import { INSTANCED, TILES, WORLD_ASSETS } from './assets';
 import { createBook, type Book } from './book';
@@ -68,6 +68,7 @@ import { createCrowdTools, type CrowdTools } from './dev-crowd';
 import { createBattleTools, type BattleTools } from './dev-battles';
 import { createPatrolTools, type PatrolTools } from './dev-patrols';
 import { createFigures, traceGround } from './figures';
+import { DAY, daylightFor, mixDaylight, type Daylight } from './daylight';
 import { createGuideRay } from './guide-ray';
 import { driftYaw, idlePhase, type IdlePhase } from './idle';
 import { createMarkers } from './markers';
@@ -99,6 +100,8 @@ export type WorldOptions = {
   reducedMotion?: () => boolean;
   /** Язык хрома книги. Текст резюме остаётся русским при любом. */
   locale?: () => Locale;
+  /** Тема портфолио: под неё идёт свет мира. */
+  theme?: () => ResolvedTheme;
   /**
    * Пройдена очередная глава основного пути.
    *
@@ -132,6 +135,13 @@ export type World = {
    * Прогресс считает мир, а не интерфейс: до главы доходят и пешком, минуя
    * нижнюю полосу. Интерфейсу остаётся спросить, куда лететь.
    */
+  /**
+   * Перекладывает свет под текущую тему портфолио.
+   *
+   * Отдельной командой, как и `book.relabel`: тему меняют раз в сеанс, а
+   * сверять её шестьдесят раз в секунду пришлось бы всегда.
+   */
+  relight: () => void;
   route: {
     /** `Position.id` последней пройденной главы основного пути. */
     readonly passed: string | null;
@@ -310,6 +320,7 @@ export function createWorld(
     postProcessing = true,
     reducedMotion,
     locale,
+    theme,
     onChapter,
     onRest,
   } = options;
@@ -430,7 +441,7 @@ export function createWorld(
 
   // --- Свет ---------------------------------------------------------------
 
-  const ambient = new THREE.AmbientLight(0xffffff, 1);
+  const ambient = new THREE.AmbientLight(DAY.ambient.color, DAY.ambient.intensity);
   scene.add(ambient);
 
   const dirLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -451,7 +462,11 @@ export function createWorld(
   dirLight.frustumCulled = false;
   scene.add(dirLight);
 
-  const hemiLight = new THREE.HemisphereLight(0x7c7a90, 0x5f5b4f, 7);
+  const hemiLight = new THREE.HemisphereLight(
+    DAY.hemisphere.sky,
+    DAY.hemisphere.ground,
+    DAY.hemisphere.intensity,
+  );
   hemiLight.frustumCulled = false;
   scene.add(hemiLight);
 
@@ -490,9 +505,67 @@ export function createWorld(
   bookKey.frustumCulled = false;
   bookScene.add(bookAmbient, bookHemi, bookKey, bookKey.target);
 
-  scene.background = new THREE.Color(0x50638e);
-  // Подобрано под обрезанный мир 119.7 x 114.7 на рабочей дистанции орбиты.
-  scene.fog = new THREE.Fog(0x50638e, 70, 170);
+  /*
+   * Небо, туман, свет и эмиссия — одним набором из `daylight.ts`: мир идёт за
+   * темой портфолио, и держать её половину здесь числами значило бы однажды
+   * поменять небо, забыв про туман.
+   */
+  scene.background = new THREE.Color(DAY.sky);
+  scene.fog = new THREE.Fog(DAY.sky, DAY.fog.near, DAY.fog.far);
+
+  /** Ставит набор освещения целиком. */
+  const applyDaylight = (value: Daylight) => {
+    (scene.background as THREE.Color).setHex(value.sky);
+    scene.fog!.color.setHex(value.sky);
+    (scene.fog as THREE.Fog).near = value.fog.near;
+    (scene.fog as THREE.Fog).far = value.fog.far;
+
+    ambient.color.setHex(value.ambient.color);
+    ambient.intensity = value.ambient.intensity;
+
+    hemiLight.color.setHex(value.hemisphere.sky);
+    hemiLight.groundColor.setHex(value.hemisphere.ground);
+    hemiLight.intensity = value.hemisphere.intensity;
+
+    dirLight.color.setHex(value.sun.color);
+    dirLight.intensity = value.sun.intensity;
+
+    minorErdtree.emissiveIntensity = value.emissive.erdtree;
+    fire.emissiveIntensity = value.emissive.fire;
+    grace.emissiveIntensity = value.emissive.grace;
+  };
+
+  /**
+   * Переход между наборами.
+   *
+   * Своим ходом по кадрам, а не через `motion`: величин здесь двенадцать, и
+   * анимировать пришлось бы объект целиком — ровно та ловушка, на которой
+   * книга теряла повторные переходы. Доля же считается одним числом.
+   */
+  const LIGHT_FADE = 1.1;
+  let lightFrom = DAY;
+  let lightTo = daylightFor(theme?.() ?? 'light');
+  let lightShare = 1;
+
+  applyDaylight(lightTo);
+
+  const relight = () => {
+    const next = daylightFor(theme?.() ?? 'light');
+    if (next === lightTo) return;
+
+    // Переход начинается с того, что на экране сейчас, а не с прежнего конца:
+    // тему успевают переключить дважды, пока идёт первая секунда.
+    lightFrom = mixDaylight(lightFrom, lightTo, lightShare);
+    lightTo = next;
+    lightShare = 0;
+  };
+
+  const advanceLight = (delta: number) => {
+    if (lightShare >= 1) return;
+
+    lightShare = Math.min(1, lightShare + delta / LIGHT_FADE);
+    applyDaylight(mixDaylight(lightFrom, lightTo, lightShare));
+  };
 
   // --- Постобработка ------------------------------------------------------
 
@@ -1089,6 +1162,7 @@ export function createWorld(
     guideRay.update(camera, nextChapter(passed)?.grace ?? null);
 
     advanceIdle(delta);
+    advanceLight(delta);
 
     // После рига: книга ставится по камере, а камеру только что подвинули.
     book.update(camera);
@@ -1196,6 +1270,7 @@ export function createWorld(
     composer,
     rig,
     book,
+    relight,
     route: {
       get passed() {
         return passed;

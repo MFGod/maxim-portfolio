@@ -6,7 +6,7 @@ import { experience } from '@/data/resume';
 import type { FigureClip, WorldFigure } from '@/data/world-figures';
 import { useTranslate } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
-import { useSetting } from '@/lib/settings/hooks';
+import { useResolvedTheme, useSetting } from '@/lib/settings/hooks';
 import { figureToolsEnabled, shotToolsEnabled } from '@/lib/world/dev-tools';
 import { stations } from '@/lib/world/shots';
 import type { BookProbe, BookProbePart } from '@/lib/world/book/debug';
@@ -140,6 +140,17 @@ export function WorldCanvas({
     worldRef.current?.book.relabel();
   }, [locale]);
 
+  /*
+   * Тема — той же дорогой. Мир идёт за ней светом: полдень, открытый из
+   * тёмного интерфейса, читается чужой вкладкой, а не продолжением сайта.
+   */
+  const theme = useResolvedTheme();
+  const themeRef = useRef(theme);
+  useEffect(() => {
+    themeRef.current = theme;
+    worldRef.current?.relight();
+  }, [theme]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -158,6 +169,7 @@ export function WorldCanvas({
         // настройки движения нельзя, а книге нужен ответ на момент перехода.
         reducedMotion: () => animationsRef.current !== 'full',
         locale: () => localeRef.current,
+        theme: () => themeRef.current,
         /*
          * Счётчик станций идёт за миром. До главы доходят и пешком, минуя
          * «Назад» и «Дальше», — без этого полоса показывала бы вход, пока
