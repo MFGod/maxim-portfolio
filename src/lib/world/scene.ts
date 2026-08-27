@@ -30,7 +30,7 @@ import { zoneOf, type WorldShot } from '@/data/world-shots';
 import type { WorldBattle } from '@/lib/world/battle';
 import type { Locale, ResolvedTheme } from '@/lib/settings/types';
 
-import { INSTANCED, TILES, WORLD_ASSETS } from './assets';
+import { TILES, WORLD_ASSETS } from './assets';
 import { createBook, type Book } from './book';
 import { MAP_BOUNDS } from './bounds';
 import { createCameraRig, type CameraRig, type ControlMode } from './camera-rig';
@@ -70,6 +70,7 @@ import { createPatrolTools, type PatrolTools } from './dev-patrols';
 import { createFigures, traceGround } from './figures';
 import { DAY, daylightFor, mixDaylight, type Daylight } from './daylight';
 import { createGuideRay } from './guide-ray';
+import { loadWaves } from './loading';
 import { driftYaw, idlePhase, type IdlePhase } from './idle';
 import { createMarkers } from './markers';
 import { advanceChapter, nextChapter, pathTarget } from './route';
@@ -89,6 +90,20 @@ import { createWater } from './water';
 import { createWind, isWindy } from './wind';
 
 export type { ControlMode };
+
+/**
+ * Вехи загрузки в миллисекундах от создания мира. `null` — веха не пройдена.
+ */
+export type WorldTiming = {
+  /** Рельеф разобран и стоит в сцене. */
+  map: number | null;
+  /** Ориентиры на местах: башня, замки, благодати. */
+  landmarks: number | null;
+  /** Мир отдан наружу — по нему можно идти. */
+  ready: number | null;
+  /** Приехала и расставлена россыпь: деревья, кусты, утварь. */
+  full: number | null;
+};
 
 export type WorldOptions = {
   /** Доля загруженного, от 0 до 1. */
@@ -129,6 +144,8 @@ export type World = {
   composer: EffectComposer;
   /** Книга-резюме: носимый предмет, а не объект ландшафта. */
   book: Book;
+  /** Вехи загрузки: чем занята была каждая секунда до первого кадра. */
+  readonly timing: WorldTiming;
   /**
    * Путь по главам: что пройдено и куда вести дальше.
    *
@@ -759,15 +776,125 @@ export function createWorld(
     setShellPockets([...worldPockets(), ...tuning]);
   }
 
+  /**
+   * Замер загрузки: сколько прошло от создания мира до каждой вехи.
+   *
+   * Постоянный, а не дев-инструмент: «стало быстрее» — утверждение, которое
+   * обязано опираться на число, а не на ощущение от перезагрузки. Стоит он
+   * трёх вызовов `performance.now()` за всю жизнь сцены.
+   */
+  const started = performance.now();
+  const timing: WorldTiming = { map: null, landmarks: null, ready: null, full: null };
+  const mark = (stage: keyof WorldTiming) => {
+    timing[stage] = Math.round(performance.now() - started);
+  };
+
   let loaded = false;
   /** Появляется после загрузки: до неё смерча в сцене нет. */
   let tornado: Tornado | null = null;
   /** То же и с горшками: их инстанс-меш собирается по приходу матриц. */
   let pots: Pots | null = null;
-  manager.onLoad = () => {
-    loaded = true;
+  manager.onProgress = (_url, done, total) => {
+    onProgress?.(total > 0 ? done / total : 0);
+  };
+
+  /** Ставит разобранный тайл карты в сцену. */
+  const addTile = (gltf: { scene: THREE.Group }) => {
+    scene.add(gltf.scene);
+    clipToBounds(gltf.scene, MAP_BOUNDS);
+    buildMapShell(gltf.scene, MAP_BOUNDS);
+    setShadow(gltf.scene, false, true);
+    modifyMaterials(gltf.scene);
+
+    // Дно красится в зелёный: сквозь полупрозрачную воду оно даёт морю бирюзу.
+    const root = gltf.scene.children[0];
+    for (const child of root?.children ?? []) {
+      const mesh = child as THREE.Mesh;
+      const material = mesh.material as THREE.MeshStandardMaterial | undefined;
+      if (material?.name === 'Sand Global') {
+        setShadow(mesh, false, false);
+        material.color = new THREE.Color(0x719d4e);
+      }
+    }
+  };
+
+  /** Собирает инстанс-меш из пары «геометрия + матрицы». */
+  const addInstanced = (
+    name: string,
+    instance: { scene: THREE.Group },
+    data: { scene: THREE.Group },
+  ) => {
+    const source = instance.scene.children[0] as THREE.Mesh | undefined;
+    if (!source) return;
+
+    const transforms = data.scene.children;
+    const mesh = new THREE.InstancedMesh(
+      source.geometry,
+      source.material,
+      transforms.length,
+    );
+    mesh.name = name;
+    for (let i = 0; i < transforms.length; i++) {
+      mesh.setMatrixAt(i, transforms[i]!.matrixWorld);
+    }
+    setShadow(mesh, true, false);
+    // Ветер заводится до `renderer.compile`: патч материала меняет шейдер, и
+    // прогрев должен собрать уже его, а не переделывать программу в кадре.
+    if (isWindy(name)) wind.apply(mesh);
+    scene.add(mesh);
+  };
+
+  /** Грузит волну инстансов целиком: пары файлов идут параллельно. */
+  const loadInstanced = async (names: readonly string[]) => {
+    await Promise.all(
+      names.map(async (name) => {
+        const [instance, data] = await Promise.all([
+          loader.loadAsync(`${WORLD_ASSETS}/instanced/${name}.glb`),
+          loader.loadAsync(`${WORLD_ASSETS}/instanced_data/${name}.glb`),
+        ]);
+
+        addInstanced(name, instance, data);
+      }),
+    );
+  };
+
+  /*
+   * Мир приходит двумя волнами, а не одним пакетом.
+   *
+   * Раньше первый кадр ждал последний куст: две сотни файлов инстансов висели
+   * в той же очереди, что и рельеф. Теперь после карты и ориентиров мир
+   * отдаётся наружу — по нему уже можно идти, — а россыпь достраивается на
+   * глазах. Разбиение живёт в `loading.ts`, здесь только порядок.
+   *
+   * Плата названа честно: пока не приехала вторая волна, карты препятствий
+   * ещё нет, и камера в эти секунды проходит сквозь деревья. Посетитель в них
+   * не упирается — он стоит на станции у входа и осматривается.
+   */
+  void (async () => {
+    for (const tile of TILES) {
+      addTile(await loader.loadAsync(`${WORLD_ASSETS}/${tile}.glb`));
+    }
+    mark('map');
+
+    // Карманы и купол считаются по рельефу, а не по инстансам: можно сразу.
     applyPockets();
     refreshShellMesh();
+
+    const waves = loadWaves();
+    await loadInstanced(waves.landmarks);
+    mark('landmarks');
+
+    /*
+     * Первый кадр с миллионами треугольников компилирует шейдеры и подвисает
+     * на доли секунды. Если начать вход сразу, он начнётся с рывка — поэтому
+     * прогреваем до того, как отдать сцену наружу. Второй прогрев ждёт вторую
+     * волну: у россыпи свои материалы.
+     */
+    renderer.compile(scene, camera);
+    mark('ready');
+    onLoaded?.();
+
+    await loadInstanced(waves.scatter);
 
     // Карта препятствий строится по инстансам, поэтому только когда пришли все.
     buildObstacleField(scene, MAP_BOUNDS);
@@ -780,61 +907,10 @@ export function createWorld(
     // `renderer.compile` — прогрев должен собрать уже расширенную сферу.
     pots = attachPots(scene, { reducedMotion });
 
-    // Первый кадр с семью миллионами треугольников компилирует шейдеры и
-    // подвисает на доли секунды. Если начать вход сразу, он начнётся с рывка —
-    // поэтому прогреваем до того, как отдать сцену наружу.
     renderer.compile(scene, camera);
-    onLoaded?.();
-  };
-  manager.onProgress = (_url, done, total) => {
-    onProgress?.(total > 0 ? done / total : 0);
-  };
-
-  for (const tile of TILES) {
-    loader.load(`${WORLD_ASSETS}/${tile}.glb`, (gltf) => {
-      scene.add(gltf.scene);
-      clipToBounds(gltf.scene, MAP_BOUNDS);
-      buildMapShell(gltf.scene, MAP_BOUNDS);
-      setShadow(gltf.scene, false, true);
-      modifyMaterials(gltf.scene);
-
-      // Дно красится в зелёный: сквозь полупрозрачную воду оно даёт морю бирюзу.
-      const root = gltf.scene.children[0];
-      for (const child of root?.children ?? []) {
-        const mesh = child as THREE.Mesh;
-        const material = mesh.material as THREE.MeshStandardMaterial | undefined;
-        if (material?.name === 'Sand Global') {
-          setShadow(mesh, false, false);
-          material.color = new THREE.Color(0x719d4e);
-        }
-      }
-    });
-  }
-
-  for (const name of INSTANCED) {
-    loader.load(`${WORLD_ASSETS}/instanced/${name}.glb`, (instance) => {
-      loader.load(`${WORLD_ASSETS}/instanced_data/${name}.glb`, (data) => {
-        const source = instance.scene.children[0] as THREE.Mesh | undefined;
-        if (!source) return;
-
-        const transforms = data.scene.children;
-        const mesh = new THREE.InstancedMesh(
-          source.geometry,
-          source.material,
-          transforms.length,
-        );
-        mesh.name = name;
-        for (let i = 0; i < transforms.length; i++) {
-          mesh.setMatrixAt(i, transforms[i]!.matrixWorld);
-        }
-        setShadow(mesh, true, false);
-        // Ветер заводится до `renderer.compile`: патч материала меняет шейдер,
-        // и прогрев должен собрать уже его, а не переделывать программу в кадре.
-        if (isWindy(name)) wind.apply(mesh);
-        scene.add(mesh);
-      });
-    });
-  }
+    loaded = true;
+    mark('full');
+  })();
 
   // --- Книга ---------------------------------------------------------------
 
@@ -1271,6 +1347,9 @@ export function createWorld(
     rig,
     book,
     relight,
+    get timing() {
+      return timing;
+    },
     route: {
       get passed() {
         return passed;
