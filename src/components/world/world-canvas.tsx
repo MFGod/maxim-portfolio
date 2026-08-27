@@ -147,6 +147,17 @@ export function WorldCanvas({
         // настройки движения нельзя, а книге нужен ответ на момент перехода.
         reducedMotion: () => animationsRef.current !== 'full',
         locale: () => localeRef.current,
+        /*
+         * Счётчик станций идёт за миром. До главы доходят и пешком, минуя
+         * «Назад» и «Дальше», — без этого полоса показывала бы вход, пока
+         * посетитель стоит у Flexy.
+         */
+        onChapter: (positionId) => {
+          if (!positionId) return;
+
+          const index = stations().findIndex((stop) => stop.positionId === positionId);
+          if (index >= 0) setStation(index);
+        },
         onLoaded: () => {
           setReady(true);
           setShots(world.shots.list().length);
@@ -204,6 +215,15 @@ export function WorldCanvas({
   };
 
   const stops = stations();
+
+  /**
+   * Первая станция главы или −1.
+   *
+   * По `positionId`, а не по совпадению ракурсов: прибытие первой главы лежит
+   * в точках входа, и сравнение самих ракурсов там не сходится.
+   */
+  const stationOfChapter = (positionId: string) =>
+    stops.findIndex((stop) => stop.positionId === positionId);
 
   /** Подпись станции: компания из резюме, а не служебный идентификатор. */
   const stationTitle = (index: number) => {
@@ -276,9 +296,7 @@ export function WorldCanvas({
     const target = world?.route.target();
     if (!world || !target) return;
 
-    const index = stops.findIndex(
-      (stop) => stop.positionId === target.positionId && stop.shot === target.shot,
-    );
+    const index = stationOfChapter(target.positionId);
     if (index >= 0) setStation(index);
 
     setFlying(true);

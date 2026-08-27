@@ -97,6 +97,13 @@ export type WorldOptions = {
   reducedMotion?: () => boolean;
   /** Язык хрома книги. Текст резюме остаётся русским при любом. */
   locale?: () => Locale;
+  /**
+   * Пройдена очередная глава основного пути.
+   *
+   * Зовётся только на смене: до главы доходят и пешком, минуя нижнюю полосу, и
+   * без этого её счётчик показывал бы вход, пока посетитель стоит у Flexy.
+   */
+  onChapter?: (positionId: string | null) => void;
 };
 
 export type World = {
@@ -293,6 +300,7 @@ export function createWorld(
     postProcessing = true,
     reducedMotion,
     locale,
+    onChapter,
   } = options;
 
   const manager = new THREE.LoadingManager();
@@ -373,6 +381,17 @@ export function createWorld(
   water.metalness = 0.853;
   water.roughness = 0.11;
   water.needsUpdate = true;
+  /*
+   * Свой ключ кэша программ — иначе правка ниже достанется чужому материалу.
+   *
+   * Ключ считается по признакам материала, а не по его правкам, и второй
+   * `MeshStandardMaterial` с тем же набором признаков получил бы ту же
+   * скомпилированную программу. Чей шейдер собрался первым, тот и достаётся
+   * обоим: либо вода снова блестит как металл, либо прямой блик пропадает у
+   * материала, которому он положен. Тот же приём, что у ветра (`wind.ts`) и у
+   * дорожки (`guide-ray.ts`).
+   */
+  water.customProgramCacheKey = () => 'water-no-direct-specular';
   // Прямой блик у воды убран: с ним она блестит как металл.
   water.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1007,11 +1026,16 @@ export function createWorld(
      * пронесли.
      */
     if (!rig.flying) {
-      passed = advanceChapter(passed, [
+      const reached = advanceChapter(passed, [
         camera.position.x,
         camera.position.y,
         camera.position.z,
       ]);
+
+      if (reached !== passed) {
+        passed = reached;
+        onChapter?.(passed);
+      }
     }
     markers.update(camera);
     guideRay.update(camera, nextChapter(passed)?.grace ?? null);
