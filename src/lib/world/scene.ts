@@ -84,6 +84,7 @@ import { buildObstacleField, clearObstacleField, obstacleHeightAt } from './obst
 import { attachPots, type Pots } from './pots';
 import { flightPath, peakFlight, worldPockets } from './shots';
 import { attachTornado, type Tornado } from './tornado';
+import { createWater } from './water';
 import { createWind, isWindy } from './wind';
 
 export type { ControlMode };
@@ -375,40 +376,17 @@ export function createWorld(
 
   // --- Материалы ----------------------------------------------------------
 
-  const water = new THREE.MeshStandardMaterial();
+  const waterMaterial = new THREE.MeshStandardMaterial();
   const minorErdtree = new THREE.MeshStandardMaterial();
   const fire = new THREE.MeshStandardMaterial();
   const grace = new THREE.MeshStandardMaterial();
 
-  water.envMap = envmap;
-  water.transparent = true;
-  water.depthWrite = true;
-  // `specularIntensity` в форке выставлялся здесь же, но у MeshStandardMaterial
-  // такого свойства нет — строка была пустышкой. Прямой блик убирает шейдерная
-  // правка ниже, она и работала всё это время.
-  water.opacity = 0.6;
-  water.color = new THREE.Color(0x46d3dd);
-  water.metalness = 0.853;
-  water.roughness = 0.11;
-  water.needsUpdate = true;
   /*
-   * Свой ключ кэша программ — иначе правка ниже достанется чужому материалу.
-   *
-   * Ключ считается по признакам материала, а не по его правкам, и второй
-   * `MeshStandardMaterial` с тем же набором признаков получил бы ту же
-   * скомпилированную программу. Чей шейдер собрался первым, тот и достаётся
-   * обоим: либо вода снова блестит как металл, либо прямой блик пропадает у
-   * материала, которому он положен. Тот же приём, что у ветра (`wind.ts`) и у
-   * дорожки (`guide-ray.ts`).
+   * Вода собрана отдельным узлом: цвет, отражение и рябь в нормали. Почему
+   * рябь именно в нормали — замер геометрии в `water.ts`.
    */
-  water.customProgramCacheKey = () => 'water-no-direct-specular';
-  // Прямой блик у воды убран: с ним она блестит как металл.
-  water.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      'vec3 totalSpecular = reflectedLight.directSpecular + reflectedLight.indirectSpecular;',
-      'vec3 totalSpecular = reflectedLight.indirectSpecular;',
-    );
-  };
+  const water = createWater();
+  water.apply(waterMaterial, envmap);
 
   minorErdtree.color = new THREE.Color(0xfffeb6);
   minorErdtree.emissive = new THREE.Color(0xffa51d);
@@ -424,7 +402,7 @@ export function createWorld(
   grace.emissive = new THREE.Color(0xe7b962);
   grace.emissiveIntensity = 2;
 
-  const ownMaterials = [water, minorErdtree, fire, grace];
+  const ownMaterials = [waterMaterial, minorErdtree, fire, grace];
 
   function setShadow(object: THREE.Object3D, cast = false, receive = false) {
     object.castShadow = cast;
@@ -442,7 +420,7 @@ export function createWorld(
       else if (name === 'Water') {
         mesh.receiveShadow = false;
         mesh.castShadow = false;
-        mesh.material = water;
+        mesh.material = waterMaterial;
       } else if (name === 'Fire') mesh.material = fire;
       else if (name === 'Grace Light') mesh.material = grace;
 
@@ -1082,6 +1060,7 @@ export function createWorld(
     pots?.update(delta);
     figures.update(delta, camera);
     wind.advance(delta);
+    water.advance(delta);
 
     /*
      * Путь считается после рига и до отрисовки: камера уже там, где будет в
