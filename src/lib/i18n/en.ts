@@ -288,6 +288,9 @@ export const en: Dictionary = deepFreeze({
   'world.state.lowMemory': 'Not enough device memory for the 3D world',
 
   'world.loading': 'Loading the world',
+  'world.failed.title': 'The world did not load',
+  'world.failed.hint': 'The connection seems to have dropped: the map is 20 MB',
+  'world.failed.retry': 'Try again',
   'world.controls.label': 'Camera controls',
   'world.controls.orbit': 'Orbit',
   'world.controls.fps': 'First person',

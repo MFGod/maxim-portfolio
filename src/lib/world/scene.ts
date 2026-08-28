@@ -22,12 +22,10 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
-import { worldFigures, type WorldFigure } from '@/data/world-figures';
+import { worldFigures } from '@/data/world-figures';
 import { worldBattles } from '@/data/world-battles';
-import { battleView } from '@/lib/world/battle';
-import { worldPatrols, type WorldPatrol } from '@/data/world-patrols';
+import { worldPatrols } from '@/data/world-patrols';
 import { zoneOf, type WorldShot } from '@/data/world-shots';
-import type { WorldBattle } from '@/lib/world/battle';
 import type { Locale, ResolvedTheme } from '@/lib/settings/types';
 
 import { TILES, WORLD_ASSETS } from './assets';
@@ -35,39 +33,8 @@ import { createBook, type Book } from './book';
 import { MAP_BOUNDS } from './bounds';
 import { createCameraRig, type CameraRig, type ControlMode } from './camera-rig';
 import { clipToBounds } from './clip-map';
-import {
-  clearMarks,
-  clearRoute,
-  markInstances,
-  markRoute,
-  type MarkedInstance,
-} from './dev-markers';
-import {
-  adoptFigure,
-  clearFigures,
-  droppedFigures,
-  formatFigures,
-  listFigures,
-  placeFigure,
-  removeFigure,
-  tweakFigure,
-  type FigurePatch,
-} from './dev-figures';
-import {
-  applyShot,
-  clearShots,
-  exportShots,
-  listShots,
-  pocketsFromShots,
-  removeShot,
-  saveShot,
-  type CameraShot,
-} from './dev-shots';
-import { figureTools, shotTools } from './dev-tools';
-import { createCrowdTools, type CrowdTools } from './dev-crowd';
-import { createBattleTools, type BattleTools } from './dev-battles';
-import { createPatrolTools, type PatrolTools } from './dev-patrols';
-import { createFigures, traceGround } from './figures';
+import type { WorldDevDrafts, WorldDevTools } from './dev-console';
+import { createFigures, type Figures } from './figures';
 import { DAY, daylightFor, mixDaylight, type Daylight } from './daylight';
 import { loadWaves } from './loading';
 import { driftYaw, idlePhase, type IdlePhase } from './idle';
@@ -87,7 +54,7 @@ import {
 } from './map-shell';
 import { buildObstacleField, clearObstacleField, obstacleHeightAt } from './obstacles';
 import { attachPots, type Pots } from './pots';
-import { flightPath, peakFlight, worldPockets } from './shots';
+import { flightPath, worldPockets } from './shots';
 import { createStars } from './stars';
 import { attachTornado, type Tornado } from './tornado';
 import { createWater } from './water';
@@ -143,6 +110,18 @@ export type WorldOptions = {
    * сообщает, что началось.
    */
   onRest?: (resting: boolean) => void;
+  /**
+   * Мир не собрался: не приехала геометрия, без которой показывать нечего.
+   *
+   * Раньше этого сообщения не было, и отказ загрузки не обрабатывался вовсе —
+   * промис загрузки просто отклонялся в пустоту, `onLoaded` не наступал, и
+   * посетитель оставался на полосе загрузки навсегда. Любой сетевой сбой на
+   * двадцати мегабайтах карты выглядел как зависший сайт.
+   *
+   * Зовётся только на отказе первой волны — рельефа и ориентиров. Россыпь
+   * приезжает уже поверх живого мира, и её потеря сообщения не стоит.
+   */
+  onFailed?: (error: unknown) => void;
 };
 
 export type World = {
@@ -207,113 +186,23 @@ export type World = {
    * положении иначе нельзя — качание живёт только в вершинном шейдере.
    */
   wind: { value: number };
-  /** Номера над инстансами: инструмент подбора точек. */
-  marks: {
-    show: (name: string) => MarkedInstance[];
-    clear: () => void;
-    /** Схема пролёта: линия, стрелки и подписи остановок. */
-    route: () => number;
-    clearRoute: () => void;
-  };
   /**
-   * Расстановка фигур: поставить, поправить, выгрузить в данные. Живёт рядом с
-   * `shots` и работает так же — черновик в `localStorage`, итог в `src/data`.
+   * Инструменты подбора: пометки, расстановка, заселение, дозоры, стычки,
+   * ракурсы. `null`, пока их не подключили, и всегда `null` в прод-сборке.
    */
-  figures: {
-    place: (patch?: FigurePatch) => WorldFigure;
-    tweak: (id: string, patch: FigurePatch) => WorldFigure | null;
-    list: () => WorldFigure[];
-    remove: (id: string) => boolean;
-    clear: () => void;
-    export: () => string;
-    /** Сколько фигур стоит в сцене сейчас. */
-    count: () => number;
-    /** Всё, что стоит в мире: утверждённое и черновое. */
-    placed: () => readonly WorldFigure[];
-    /** Фигура по имени: из данных или из черновика. */
-    find: (id: string) => WorldFigure | null;
-    /** Переносит фигуру из данных в черновик, чтобы её можно было править. */
-    adopt: (id: string) => WorldFigure | null;
-    /** Подводит камеру к фигуре: со ста двадцати семи иначе её не найти. */
-    goTo: (id: string) => boolean;
-    /**
-     * Подводит камеру к идущей группе.
-     *
-     * Дозор не стоит на месте, поэтому целью служит не запись в данных, а тот,
-     * кто сейчас идёт первым: место берётся у него из сцены.
-     */
-    goToPatrol: (id: string) => boolean;
-    /**
-     * Подводит камеру к стычке — сбоку от фронта, чтобы видеть обе шеренги.
-     *
-     * Без имени берёт следующую по кругу: стычек три, они разбросаны по карте,
-     * и обойти их подряд одной командой удобнее, чем вспоминать имена.
-     *
-     * @returns имя стычки, к которой поехали, или `null`, если стычек нет
-     */
-    goToBattle: (id?: string) => string | null;
-    /** Ходящие дозоры: маршруты для проверки. */
-    patrols: () => readonly WorldPatrol[];
-    /** Идущие стычки: их площадки и составы. */
-    battles: () => readonly WorldBattle[];
-    /** Точка земли под курсором. Координаты — доли канваса от 0 до 1. */
-    groundAt: (x: number, y: number) => [number, number, number] | null;
-    /** Имя фигуры под курсором. Координаты те же. */
-    pickAt: (x: number, y: number) => string | null;
-    /**
-     * Верхушка препятствия в точке или `null`, если там чисто.
-     *
-     * Та же карта, что держит камеру от столкновений: 8968 инстансов,
-     * огрублённых до сфер. Нужна при прокладке маршрутов — без неё дозор
-     * проходит сквозь караван, стоящий на дороге.
-     */
-    blockedAt: (x: number, z: number) => number | null;
-    /**
-     * Точная высота земли в точке — лучом по геометрии карты.
-     *
-     * Сетка оболочки для этого не годится: по замеру автора она висит над
-     * рельефом (медиана 0,65), и фигура по её высоте идёт по воздуху. Луч
-     * стоит около 110 мс, поэтому он только для расстановки и запекания
-     * маршрутов, но не для кадра.
-     */
-    dropAt: (
-      x: number,
-      z: number,
-      onto?: 'ground' | 'props' | 'road' | 'top',
-    ) => number | null;
-    /**
-     * Все высоты ленты дороги в точке, сверху вниз.
-     *
-     * На мостах лента лежит в два-три слоя, и один ответ здесь врёт: маршрут
-     * должен выбирать тот слой, по которому шёл до этого. Выбор — за тем, кто
-     * печёт маршрут; здесь только замер.
-     */
-    dropAll: (x: number, z: number) => number[];
-  };
+  readonly dev: WorldDevTools | null;
   /**
-   * Заселение: замеры и поиск мест под сотни фигур. Дев-инструмент, живёт
-   * рядом с расстановкой и в прод не идёт — им пекут содержимое `src/data`.
+   * Подключает инструменты подбора к живому миру.
+   *
+   * Зовётся снаружи и только в разработке. Сцена не импортирует `dev-console`
+   * сама намеренно: статический импорт утащил бы шесть модулей `dev-*` в
+   * прод-бандл, где они не нужны и невидимы. Поэтому фабрику передают внутрь, а
+   * сцена отдаёт ей свои внутренности и запоминает результат.
+   *
+   * Повторный вызов возвращает уже подключённые инструменты: слушатели клавиш
+   * вешаются один раз.
    */
-  crowd: CrowdTools;
-  /**
-   * Маршруты дозоров: замер по ленте дороги и перепекание. Дев-инструмент того
-   * же рода, что и `crowd`, — им пекут `src/data/world-patrols.ts`.
-   */
-  patrols: PatrolTools;
-  /**
-   * Площадки стычек: замер поляны и проверка того, что лежит в данных.
-   * Дев-инструмент, им пекут `src/data/world-battles.ts`.
-   */
-  battles: BattleTools;
-  /** Сохранённые ракурсы: подбор вживую, выгрузка в данные. */
-  shots: {
-    save: (name?: string) => CameraShot;
-    list: () => CameraShot[];
-    go: (name: string) => CameraShot | null;
-    remove: (name: string) => boolean;
-    clear: () => void;
-    export: () => string;
-  };
+  attachDevTools: (make: (context: WorldDevContext) => WorldDevTools) => WorldDevTools;
   /**
    * Прокрутить мир на столько-то секунд кадрами по `stride`. Дев-ручка: без
    * окна `requestAnimationFrame` не поднимается, и сцена стоит на первом кадре.
@@ -327,8 +216,49 @@ export type World = {
   dispose: () => void;
 };
 
-/** Откуда пускается луч вниз при расстановке: выше самой высокой горы карты. */
-const DROP_HEIGHT = 40;
+/**
+ * Внутренности мира, которые нужны инструментам подбора.
+ *
+ * Это узкая дверь, а не открытая сцена: инструменты получают ровно те замеры и
+ * ручки, из которых собирают всё остальное сами. Список растёт неохотно — что
+ * попало сюда, то потом нельзя поменять, не тронув `dev-console`.
+ */
+export type WorldDevContext = {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  controls: CameraRig['controls'];
+  rig: CameraRig;
+  /** Живые фигуры мира: расстановка, дозоры, стычки. */
+  figures: Figures;
+  /** Один луч на все опросы: его переиспользуют, а не создают на каждый замер. */
+  raycaster: THREE.Raycaster;
+  /** Наводит луч по доле канваса от 0 до 1. */
+  aimAt: (x: number, y: number) => void;
+  /** Высота поверхности в точке — лучом сверху по геометрии карты. */
+  surfaceAt: (
+    x: number,
+    z: number,
+    onto?: 'ground' | 'props' | 'road' | 'top',
+  ) => number | null;
+  /** Высота купола в точке: замер без кадра и без луча. */
+  shellHeightAt: (x: number, z: number) => number | null;
+  /** Текущий отступ купола от рельефа. */
+  shellPadding: () => number;
+  /** Верхушка препятствия в точке или `null`, если там чисто. */
+  obstacleHeightAt: (x: number, z: number) => number | null;
+  /** Пересобрать расстановку: данные плюс черновик. */
+  refreshFigures: () => Promise<void>;
+  /** Пересчитать карманы купола: данные плюс черновик. */
+  applyPockets: () => void;
+};
+
+/**
+ * Откуда пускается луч вниз при расстановке: выше самой высокой горы карты.
+ *
+ * Открыт наружу ради `dev-console`: замеры высот делает он, а высота начала
+ * луча — свойство карты, и держать её в двух местах значит однажды разойтись.
+ */
+export const DROP_HEIGHT = 40;
 
 /** Кадр фиксированной длительности, как в форке. */
 const FRAME_MS = 1000 / 60;
@@ -374,6 +304,7 @@ export function createWorld(
     onChapter,
     onBook,
     onRest,
+    onFailed,
   } = options;
 
   const manager = new THREE.LoadingManager();
@@ -913,53 +844,6 @@ export function createWorld(
   const rig = createCameraRig(camera, canvas);
   const controls = rig.controls;
 
-  /**
-   * Горячие клавиши подбора: Shift+S — снимок, Shift+E — выгрузка всех.
-   * Руки при подборе заняты мышью, а лезть в консоль на каждый кадр долго.
-   */
-  const onDevKey = (event: KeyboardEvent) => {
-    if (!event.shiftKey) return;
-
-    /*
-     * Обход стычек живёт под флагом расстановки, а не под подбором ракурсов:
-     * стычки — часть населения мира, и смотрят их тогда же, когда правят
-     * фигур. Своя проверка флага нужна потому, что подбор ракурсов обычно
-     * выключен, а посмотреть бой хочется.
-     */
-    if (event.code === 'KeyB' && figureTools) {
-      const id = goToBattle();
-      console.info(id ? `стычка «${id}»` : 'стычек в мире нет');
-      return;
-    }
-
-    if (!shotTools) return;
-
-    if (event.code === 'KeyS') {
-      const shot = saveShot(camera, controls.target);
-      applyPockets();
-      console.info(`снимок «${shot.name}»`, shot.at, '→', shot.look);
-      return;
-    }
-
-    if (event.code === 'KeyE') {
-      const list = listShots();
-      if (!list.length) {
-        console.info('снимков пока нет');
-        return;
-      }
-
-      const text = exportShots();
-      console.info(`\n${text}`);
-      // Нажатие клавиши — жест пользователя, буфер обмена в этот момент открыт.
-      navigator.clipboard
-        .writeText(text)
-        .then(() => console.info(`скопировано в буфер: ${list.length} шт.`))
-        .catch(() => console.info('в буфер не отдалось — копируй из вывода выше'));
-    }
-  };
-
-  window.addEventListener('keydown', onDevKey);
-
   // --- Оболочка камеры ------------------------------------------------------
 
   /**
@@ -1006,9 +890,9 @@ export function createWorld(
    */
   function applyPockets() {
     // Утверждённые ракурсы из данных плюс то, что подбирается прямо сейчас.
-    // Несохранённые снимки участвуют только при включённом инструменте: иначе
-    // чужой `localStorage` пробивал бы дыры в куполе у случайного посетителя.
-    const tuning = shotTools ? pocketsFromShots() : [];
+    // Черновик приходит от инструментов подбора и только в разработке: у
+    // посетителя их нет, и дыр в куполе от чужого `localStorage` тоже.
+    const tuning = drafts?.pockets() ?? [];
     setShellPockets([...worldPockets(), ...tuning]);
   }
 
@@ -1123,6 +1007,9 @@ export function createWorld(
    * ещё нет, и камера в эти секунды проходит сквозь деревья. Посетитель в них
    * не упирается — он стоит на станции у входа и осматривается.
    */
+  /** Дошла ли загрузка до показа мира: после этого отказ уже не фатален. */
+  let shown = false;
+
   void (async () => {
     for (const tile of TILES) {
       addTile(await loader.loadAsync(`${WORLD_ASSETS}/${tile}.glb`));
@@ -1188,6 +1075,7 @@ export function createWorld(
     renderer.compile(scene, camera);
     mark('ready');
     onLoaded?.();
+    shown = true;
 
     await loadInstanced(waves.scatter);
 
@@ -1209,7 +1097,23 @@ export function createWorld(
 
     loaded = true;
     mark('full');
-  })();
+  })().catch((error: unknown) => {
+    /*
+     * Отказ загрузки. Без этого перехвата промис отклонялся в пустоту: полоса
+     * загрузки замирала на своём проценте и висела так до закрытия вкладки.
+     *
+     * Россыпь роняет только запись в консоль — мир к этому мигу уже показан и
+     * работает, не хватает лишь кустов. А вот потеря рельефа или ориентиров
+     * показывать нечего, и об этом обязан узнать интерфейс.
+     */
+    if (shown) {
+      console.error('вторая волна мира не приехала', error);
+      return;
+    }
+
+    console.error('мир не загрузился', error);
+    onFailed?.(error);
+  });
 
   // --- Книга ---------------------------------------------------------------
 
@@ -1321,16 +1225,16 @@ export function createWorld(
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
 
-  /** Какую стычку показали прошлый раз: `goToBattle()` без имени идёт дальше. */
-  let battleCursor = -1;
+  /** Направление замера: луч всегда идёт сверху вниз. */
   const DOWN = new THREE.Vector3(0, -1, 0);
 
-  /** Инструменты заселения. Ленивые: см. ниже, где они отдаются наружу. */
-  let crowdTools: CrowdTools | null = null;
-  const crowd = (): CrowdTools =>
-    (crowdTools ??= createCrowdTools({ scene, surfaceAt }));
-  let patrolTools: PatrolTools | null = null;
-  let battleTools: BattleTools | null = null;
+  /**
+   * Инструменты подбора и их черновики. Подключаются снаружи и только в
+   * разработке — см. `attachDevTools`. В прод-сборке остаются `null`, и обе
+   * пересборки, расстановки и купола, читают одни данные.
+   */
+  let devTools: WorldDevTools | null = null;
+  let drafts: WorldDevDrafts | null = null;
 
   /**
    * Наводит луч по доле канваса.
@@ -1417,43 +1321,6 @@ export function createWorld(
     return +best.point.y.toFixed(3);
   }
 
-  /**
-   * Подводит камеру к стычке. Без имени — к следующей по кругу.
-   *
-   * Камеру надо сперва забрать у рига: он держит взгляд на станции и каждый
-   * кадр возвращает его туда. Без этого камера доезжает до боя и тут же
-   * уплывает обратно.
-   */
-  function goToBattle(id?: string): string | null {
-    const list = figures.battles();
-    if (list.length === 0) return null;
-
-    const battle = id
-      ? list.find((item) => item.id === id)
-      : list[((++battleCursor % list.length) + list.length) % list.length];
-    if (!battle) return null;
-
-    const view = battleView(battle);
-
-    /*
-     * Купол не пускает камеру вниз: он висит над рельефом примерно на 0,6
-     * юнита, и поставленная под него камера тут же выталкивается вверх вместе
-     * со своей целью — взгляд сохраняется, а бой уезжает под нижний край
-     * кадра. Поэтому камера сразу ставится над куполом, а не под ним.
-     */
-    const ceiling = shellHeightAt(view.at[0], view.at[2]);
-    const y = ceiling === null ? view.at[1] : Math.max(view.at[1], ceiling + 0.01);
-
-    rig.cancel();
-    rig.setStationLook(false);
-    rig.setControlMode('orbit');
-
-    camera.position.set(view.at[0], y, view.at[2]);
-    controls.target.set(view.look[0], view.look[1], view.look[2]);
-    controls.update();
-    return battle.id;
-  }
-
   function aimAt(x: number, y: number) {
     camera.updateMatrixWorld();
     pointer.set(x * 2 - 1, 1 - y * 2);
@@ -1467,9 +1334,10 @@ export function createWorld(
    * вставленная в данные фигура двоилась бы со своей же черновой записью.
    */
   function refreshFigures() {
-    const дев = process.env.NODE_ENV === 'development';
-    const tuning = дев ? listFigures() : [];
-    const dropped = дев ? new Set(droppedFigures()) : new Set<string>();
+    // Черновик приходит от инструментов подбора. Их нет — показываем данные
+    // как есть: у посетителя подбирать нечего.
+    const tuning = drafts?.figures() ?? [];
+    const dropped = new Set(drafts?.dropped() ?? []);
 
     const byId = new Map(worldFigures.map((figure) => [figure.id, figure]));
     for (const figure of tuning) byId.set(figure.id, figure);
@@ -1649,13 +1517,14 @@ export function createWorld(
     // её должен тот, кто знает, что она одна на всех.
     figures.dispose();
     clearObstacleField();
-    // Пометки держат свои текстуры: общий обход сцены их не разберёт.
-    clearMarks(scene);
-    clearRoute(scene);
-    clearRoute(scene, '__dev_peak');
+    // Инструменты подбора снимают свои клавиши и разбирают пометки сами: их
+    // текстуры общий обход сцены не заберёт, а знает о них только тот, кто
+    // рисовал. В прод-сборке подключать нечего, и вызова не происходит.
+    devTools?.dispose();
+    devTools = null;
+    drafts = null;
     cancelAnimationFrame(frame);
     observer.disconnect();
-    window.removeEventListener('keydown', onDevKey);
 
     rig.dispose();
 
@@ -1744,220 +1613,37 @@ export function createWorld(
       },
     },
     wind: wind.time,
-    marks: {
-      show: (name: string) => markInstances(scene, name),
-      clear: () => clearMarks(scene),
-      route: () => {
-        const main = flightPath().map((point) => ({
-          label: point.label,
-          at: point.shot.at,
-        }));
-        const peak = peakFlight().map((point) => ({
-          label: point.label,
-          at: point.shot.at,
-        }));
-
-        // Ветка к вершине идёт своим цветом: она не часть маршрута карьеры.
-        const drawn = markRoute(scene, main, { color: 0x7ef7ff });
-        return drawn + markRoute(scene, peak, { color: 0xffb45e, name: '__dev_peak' });
-      },
-      clearRoute: () => {
-        clearRoute(scene);
-        clearRoute(scene, '__dev_peak');
-      },
+    get dev() {
+      return devTools;
     },
-    figures: {
-      place: (patch?: FigurePatch) => {
-        // Точка по умолчанию — куда смотрит камера: подводишь вид и ставишь.
-        const target = controls.target;
-        const figure = placeFigure([target.x, target.y, target.z], patch);
-        void refreshFigures();
-        return figure;
-      },
-      tweak: (id: string, patch: FigurePatch) => {
-        const figure = tweakFigure(id, patch);
-        if (figure) void refreshFigures();
-        return figure;
-      },
-      list: listFigures,
-      placed: figures.placed,
-      /** Фигура по имени — хоть из данных, хоть из черновика. */
-      find: (id: string) => figures.placed().find((figure) => figure.id === id) ?? null,
-      /**
-       * Берёт фигуру из данных в черновик, чтобы её можно было двигать.
-       * Уже черновую возвращает как есть.
-       */
-      adopt: (id: string) => {
-        const figure = figures.placed().find((item) => item.id === id);
-        return figure ? adoptFigure(figure) : null;
-      },
-      goToPatrol: (id: string) => {
-        const patrol = figures.patrols().find((item) => item.id === id);
-        const lead = figures.object.getObjectByName(`${id}-1`);
-        if (!patrol || !lead) return false;
+    attachDevTools: (make) => {
+      // Второй вызов не собирает инструменты заново: слушатели клавиш и
+      // ленивые замеры живут по одному экземпляру на мир.
+      if (devTools) return devTools;
 
-        lead.updateWorldMatrix(true, false);
-        const place = lead.getWorldPosition(new THREE.Vector3());
-
-        // Дракона видно и издалека, человека — нет: отступ считаем от роста.
-        const away = Math.max(patrol.height * 4, 0.35);
-        rig.cancel();
-        rig.setStationLook(false);
-        rig.setControlMode('orbit');
-
-        camera.position.set(place.x + away, place.y + away * 0.7, place.z + away);
-        controls.target.set(place.x, place.y + patrol.height / 2, place.z);
-        controls.update();
-        return true;
-      },
-      goToBattle,
-      battles: figures.battles,
-      goTo: (id: string) => {
-        const figure = figures.placed().find((item) => item.id === id);
-        if (!figure) return false;
-
-        const [x, y, z] = figure.at;
-        // Смотрим с трёх ростов сбоку и чуть сверху: видно и фигуру, и землю
-        // под ней — а по земле и правят.
-        const away = figure.height * 3;
-
-        /*
-         * Камеру надо сперва забрать у рига: он держит взгляд на станции и
-         * каждый кадр возвращает его туда. Без этого камера доезжает до фигуры
-         * и тут же уплывает обратно.
-         */
-        rig.cancel();
-        rig.setStationLook(false);
-        rig.setControlMode('orbit');
-
-        camera.position.set(x + away, y + away * 0.6, z + away);
-        controls.target.set(x, y + figure.height / 2, z);
-        controls.update();
-        return true;
-      },
-      remove: (id: string) => {
-        const removed = removeFigure(id);
-        if (removed) void refreshFigures();
-        return removed;
-      },
-      clear: () => {
-        clearFigures();
-        void refreshFigures();
-      },
-      /**
-       * Весь мир целиком, а не только правки: вставляется в `world-figures.ts`
-       * на место массива. Иначе, поправив пять фигур из ста шести, автор
-       * потерял бы остальные сто одну.
-       */
-      export: () => formatFigures(figures.placed()),
-      count: figures.count,
-      patrols: figures.patrols,
-      groundAt: (x: number, y: number) => {
-        aimAt(x, y);
-
-        // Место под курсором ищем по сетке оболочки: ответ за микросекунды,
-        // а при перетаскивании его спрашивают на каждое движение мыши.
-        const point = traceGround(
-          raycaster.ray.origin,
-          raycaster.ray.direction,
-          (px, pz) => {
-            const ceiling = shellHeightAt(px, pz);
-            return ceiling === null ? null : ceiling - shellSettings.padding;
-          },
-        );
-        if (!point) return null;
-
-        /*
-         * А высоту берём лучом по видимой поверхности. Сетка висит над рельефом
-         * и у террас указывает на соседний ярус: по её высоте фигура вставала
-         * на три юнита ниже земли — по плечи в склоне.
-         */
-        const top = surfaceAt(point.x, point.z, 'top');
-
-        return [+point.x.toFixed(3), +(top ?? point.y).toFixed(3), +point.z.toFixed(3)];
-      },
-      pickAt: (x: number, y: number) => {
-        aimAt(x, y);
-        return figures.pick(raycaster);
-      },
-      blockedAt: obstacleHeightAt,
-      dropAll: (x: number, z: number) => {
-        raycaster.set(new THREE.Vector3(x, DROP_HEIGHT, z), DOWN);
-        const targets = scene.children.filter(
-          (child) =>
-            !child.name.startsWith('__') &&
-            child !== figures.object &&
-            !(child as THREE.InstancedMesh).isInstancedMesh,
-        );
-
-        return raycaster
-          .intersectObjects(targets, true)
-          .filter((hit) => {
-            const material = (hit.object as THREE.Mesh).material as
-              THREE.Material | THREE.Material[] | undefined;
-            const name = Array.isArray(material) ? material[0]?.name : material?.name;
-            return name === 'Path';
-          })
-          .map((hit) => +hit.point.y.toFixed(3));
-      },
-      dropAt: surfaceAt,
-    },
-    /*
-     * Собирается при первом обращении, а не при создании мира: инстансы
-     * приходят асинхронно, и след объектов, снятый сразу, был бы пустым.
-     */
-    get crowd() {
-      return crowd();
-    },
-    /*
-     * Тоже лениво: индекс ленты собирается по геометрии карты, а она приходит
-     * загрузкой. Собранный при создании мира индекс был бы пустым.
-     */
-    get patrols() {
-      patrolTools ??= createPatrolTools({
+      devTools = make({
         scene,
-        // След инстансов у заселения: иначе центровка загоняет дозор в куст,
-        // который прежний маршрут обходил стороной.
-        blocked: (x, z) => crowd().blocking(x, z),
+        camera,
+        controls,
+        rig,
+        figures,
+        raycaster,
+        aimAt,
+        surfaceAt,
+        shellHeightAt,
+        shellPadding: () => shellSettings.padding,
+        obstacleHeightAt,
+        refreshFigures,
+        applyPockets,
       });
-      return patrolTools;
-    },
-    /* Тоже лениво и по той же причине: земля приходит загрузкой карты. */
-    get battles() {
-      battleTools ??= createBattleTools({
-        scene,
-        blocked: (x, z) => crowd().blocking(x, z),
-        // Видимая поверхность, а не земля: под стенами Лейндела земля есть, но
-        // стоять там нельзя — сверху ярус террасы.
-        surfaceAt: (x, z) => surfaceAt(x, z, 'top'),
-      });
-      return battleTools;
-    },
-    shots: {
-      save: (name?: string) => {
-        const shot = saveShot(camera, controls.target, name);
-        // Ракурс объявляет себя проходимым сам: иначе следующий кадр вытолкнет
-        // камеру из вида, который только что сохранили.
-        applyPockets();
-        return shot;
-      },
-      list: listShots,
-      go: (name: string) => {
-        const shot = applyShot(name, camera, controls.target);
-        // Без `update` контрол вернёт камеру в свои прежние координаты.
-        if (shot) controls.update();
-        return shot;
-      },
-      remove: (name: string) => {
-        const removed = removeShot(name);
-        if (removed) applyPockets();
-        return removed;
-      },
-      clear: () => {
-        clearShots();
-        applyPockets();
-      },
-      export: exportShots,
+      drafts = devTools.drafts;
+
+      // Черновики уже могут быть непустыми: подбор пережил перезагрузку в
+      // `localStorage`, и мир поднялся без них.
+      void refreshFigures();
+      applyPockets();
+
+      return devTools;
     },
     /**
      * Прокрутить мир вручную: столько-то секунд подряд кадрами по `stride`.

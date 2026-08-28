@@ -293,6 +293,9 @@ export const ru = deepFreeze({
   'world.state.lowMemory': 'Для трёхмерного мира не хватает памяти устройства',
 
   'world.loading': 'Загружаю мир',
+  'world.failed.title': 'Мир не загрузился',
+  'world.failed.hint': 'Похоже, оборвалась связь: геометрия карты весит 20 МБ',
+  'world.failed.retry': 'Попробовать снова',
   'world.controls.label': 'Управление камерой',
   'world.controls.orbit': 'Орбита',
   'world.controls.fps': 'От первого лица',

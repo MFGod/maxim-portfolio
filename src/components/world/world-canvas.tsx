@@ -1,20 +1,28 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { experience } from '@/data/resume';
-import type { FigureClip, WorldFigure } from '@/data/world-figures';
 import { useTranslate } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 import { useResolvedTheme, useSetting } from '@/lib/settings/hooks';
-import { figureTools, shotTools } from '@/lib/world/dev-tools';
+import { DEV_TOOLS } from '@/lib/world/dev-tools';
 import { stations } from '@/lib/world/shots';
-import type { BookProbe, BookProbePart } from '@/lib/world/book/debug';
 import type { ControlMode, World } from '@/lib/world/scene';
 
-import { FigureTuner } from './figure-tuner';
-import { WorldFps } from './world-fps';
 import { WorldMenu } from './world-menu';
+
+/**
+ * Инструменты подбора. Отдельным чанком и только в разработке: `DEV_TOOLS` —
+ * литерал, который сборщик сворачивает в `false`, и вся ветка вместе с
+ * оверлеем, `dev-console` и модулями `dev-*` в прод-бандл не попадает.
+ */
+const WorldDevOverlay = DEV_TOOLS
+  ? dynamic(() => import('./world-dev-overlay').then((m) => m.WorldDevOverlay), {
+      ssr: false,
+    })
+  : null;
 
 /**
  * Канвас мира. Единственное место, где сцена встречается с React.
@@ -44,14 +52,6 @@ type Props = {
   className?: string;
 };
 
-/** Подписи и цвета отладочного оверлея книги. */
-const PROBE_PARTS: Record<BookProbePart['name'], { label: string; color: string }> = {
-  sheet: { label: 'лист', color: '#ff4d4d' },
-  right: { label: 'правая', color: '#4dff88' },
-  left: { label: 'левая', color: '#4db8ff' },
-  seam: { label: 'шов', color: '#ffd24d' },
-};
-
 export function WorldCanvas({
   chrome = true,
   interactive = true,
@@ -64,6 +64,14 @@ export function WorldCanvas({
   const worldRef = useRef<World | null>(null);
   const [progress, setProgress] = useState(0);
   const [ready, setReady] = useState(false);
+  /**
+   * Мир не собрался: геометрия не приехала.
+   *
+   * Отдельно от `ready`, потому что это не «ещё не готов», а «уже не будет».
+   * Без этого состояния отказ загрузки оставлял полосу замершей на её проценте,
+   * и сайт выглядел зависшим — а причина обычно поправимая: сеть.
+   */
+  const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<ControlMode>('orbit');
   /** Идёт ли кинематографический вход: пока идёт, показываем «пропустить». */
   const [flying, setFlying] = useState(false);
@@ -89,34 +97,6 @@ export function WorldCanvas({
   const [hinted, setHinted] = useState(false);
   /** Раскрыта ли книга-резюме. Само состояние живёт в сцене, здесь — отражение. */
   const [bookOpen, setBookOpen] = useState(false);
-  /** Замеры книги для отладочного оверлея. Только в разработке. */
-  const [probe, setProbe] = useState<BookProbe | null>(null);
-  /** Сколько ракурсов снято. Только для панели подбора, в прод не попадает. */
-  const [shots, setShots] = useState(0);
-  /** Подобранное положение закладки. Только в разработке. */
-  const [copied, setCopied] = useState(false);
-  /** Расстановка фигур. Только в разработке, за флагом `FIGURE_TOOLS`. */
-  const [figures, setFigures] = useState<WorldFigure[]>([]);
-  const [selectedFigure, setSelectedFigure] = useState<string | null>(null);
-  /** Режим постановки: щелчок по земле ставит новую фигуру. */
-  const [placing, setPlacing] = useState(false);
-  /**
-   * Режим правки расстановки. Выключен по умолчанию: пока он не включён, мир
-   * смотрят, а не редактируют — щелчок по фигуре её не хватает, а клавиши
-   * поворота остаются за книгой и камерой.
-   */
-  const [editing, setEditing] = useState(false);
-  const [figuresCopied, setFiguresCopied] = useState(false);
-  /** Идущие группы для панели: список берётся у сцены при входе в правку. */
-  const [patrols, setPatrols] = useState<{ id: string; height: number }[]>([]);
-  /** Стычки для панели. Берутся там же и тогда же, что и дозоры. */
-  const [battles, setBattles] = useState<{ id: string }[]>([]);
-  /** Что с сохранением расстановки в файл данных. */
-  const [figuresSaving, setFiguresSaving] = useState<
-    'ждём' | 'идёт' | 'готово' | 'ошибка'
-  >('ждём');
-  /** Тянем ли фигуру прямо сейчас. Не состояние: меняется внутри одного жеста. */
-  const draggingFigure = useRef(false);
 
   const animations = useSetting((settings) => settings.motion.animations);
   /*
@@ -186,11 +166,9 @@ export function WorldCanvas({
           const index = stations().findIndex((stop) => stop.positionId === positionId);
           if (index >= 0) setStation(index);
         },
+        onFailed: () => setFailed(true),
         onLoaded: () => {
           setReady(true);
-          setShots(world.shots.list().length);
-          // Весь мир, а не черновик: править и обходить надо все сто с лишним.
-          setFigures([...world.figures.placed()]);
 
           /*
            * Мир открывается на первой станции — у благодати под Древом. Дальше
@@ -206,11 +184,6 @@ export function WorldCanvas({
         },
       });
       worldRef.current = world;
-
-      // Дев-хендл: без него отладка сцены идёт вслепую.
-      if (process.env.NODE_ENV === 'development') {
-        (window as unknown as { __world?: unknown }).__world = world;
-      }
     };
 
     if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
@@ -232,6 +205,13 @@ export function WorldCanvas({
       worldRef.current = null;
     };
   }, []);
+
+  /*
+   * Ссылка на живой мир для инструментов подбора. Функцией и через
+   * `useCallback`: мир появляется после загрузки, а `worldRef.current` меняется
+   * молча — эффекты оверлея должны спрашивать его сами, а не пересобираться.
+   */
+  const liveWorld = useCallback(() => worldRef.current, []);
 
   const switchMode = (next: ControlMode) => {
     setMode(next);
@@ -264,28 +244,6 @@ export function WorldCanvas({
 
     return company ?? stop.label;
   };
-
-  /*
-   * Отладочный оверлей: проекции частей книги на экран. Нужен, потому что
-   * переворот идёт секунду с четвертью и глазами в нём не разобрать, чей край
-   * где. В сборку не попадает — условие статическое.
-   */
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-
-    let frame = 0;
-    let tick = 0;
-
-    const poll = () => {
-      // Каждый четвёртый кадр: замер нужен глазу, а не рендереру, и обновление
-      // состояния шестьдесят раз в секунду само портило бы то, что меряем.
-      if (tick++ % 4 === 0) setProbe(worldRef.current?.book.debug?.probe() ?? null);
-      frame = requestAnimationFrame(poll);
-    };
-    frame = requestAnimationFrame(poll);
-
-    return () => cancelAnimationFrame(frame);
-  }, []);
 
   /** Переключает затенение. Выбор посетителя старше пробы качества. */
   const switchOcclusion = (enabled: boolean) => {
@@ -344,302 +302,6 @@ export function WorldCanvas({
     void world.rig.flyTo(stop.shot, { freeLook: true }).finally(() => setFlying(false));
   };
 
-  /**
-   * Панель подбора ракурсов. Выключена флагом `SHOT_TOOLS` — точки уже перенесены
-   * в `world-shots.ts`, а инструмент остаётся рабочим на случай новых.
-   */
-  const tuning = shotTools;
-
-  const takeShot = () => {
-    const world = worldRef.current;
-    if (!world) return;
-
-    const shot = world.shots.save();
-    setShots(world.shots.list().length);
-    setCopied(false);
-    console.info(`снимок «${shot.name}»`, shot.at, '→', shot.look);
-  };
-
-  const copyShots = () => {
-    const world = worldRef.current;
-    if (!world || shots === 0) return;
-
-    const text = world.shots.export();
-    console.info(`\n${text}`);
-    void navigator.clipboard.writeText(text).then(
-      () => setCopied(true),
-      () => setCopied(false),
-    );
-  };
-
-  const dropShots = () => {
-    const world = worldRef.current;
-    if (!world) return;
-
-    world.shots.clear();
-    setShots(0);
-    setCopied(false);
-  };
-
-  /**
-   * Инструмент расстановки фигур. Включается флагом `FIGURE_TOOLS`: пока
-   * `world-figures.ts` пуст, он и есть единственный способ населить мир.
-   */
-  const figureTuning = figureTools;
-
-  /** Доля канваса под курсором: сцена сама переведёт её в луч. */
-  const canvasFraction = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return {
-      x: (event.clientX - rect.left) / rect.width,
-      y: (event.clientY - rect.top) / rect.height,
-    };
-  };
-
-  const readFigures = (world: World) => {
-    // В списке панели — весь мир, а не только черновик: править можно любую.
-    setFigures([...world.figures.placed()]);
-    setFiguresCopied(false);
-  };
-
-  const onCanvasPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const world = worldRef.current;
-    if (!world || !figureTuning || !editing || event.button !== 0) return;
-
-    const { x, y } = canvasFraction(event);
-
-    if (placing) {
-      const at = world.figures.groundAt(x, y);
-      if (!at) return;
-
-      const figure = world.figures.place({ at });
-      setSelectedFigure(figure.id);
-      readFigures(world);
-      return;
-    }
-
-    const hit = world.figures.pickAt(x, y);
-    if (!hit) return;
-
-    /*
-     * Фигуру из утверждённой расстановки сначала берём в черновик: сами данные
-     * заморожены, а править надо ту, что уже стоит в мире.
-     */
-    world.figures.adopt(hit);
-    setSelectedFigure(hit);
-    // Орбита слушает тот же канвас: без этого фигура едет вместе с камерой.
-    world.controls.enabled = false;
-    dragFigure(hit, event.currentTarget);
-  };
-
-  /**
-   * Ведёт фигуру до отпускания.
-   *
-   * Движение и отпускание слушаются у окна, а не у канваса: размашистая
-   * протяжка уходит за край кадра, и там события канвасу уже не достаются.
-   * Тот же приём, что у кручения книги в `book/spin.ts`.
-   */
-  const dragFigure = (id: string, canvas: HTMLCanvasElement) => {
-    draggingFigure.current = true;
-
-    const move = (event: PointerEvent) => {
-      const world = worldRef.current;
-      if (!world) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const at = world.figures.groundAt(
-        (event.clientX - rect.left) / rect.width,
-        (event.clientY - rect.top) / rect.height,
-      );
-      if (!at) return;
-
-      world.figures.tweak(id, { at });
-      readFigures(world);
-    };
-
-    const stop = () => {
-      draggingFigure.current = false;
-      if (worldRef.current) worldRef.current.controls.enabled = true;
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', stop);
-      // Отменённый жест — тоже конец: без этого орбита осталась бы выключенной.
-      window.removeEventListener('pointercancel', stop);
-    };
-
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', stop);
-    window.addEventListener('pointercancel', stop);
-  };
-
-  const tweakFigure = (patch: {
-    clip?: FigureClip;
-    height?: number;
-    turn?: number;
-  }) => {
-    const world = worldRef.current;
-    if (!world || !selectedFigure) return;
-
-    world.figures.tweak(selectedFigure, patch);
-    readFigures(world);
-  };
-
-  const removeFigure = () => {
-    const world = worldRef.current;
-    if (!world || !selectedFigure) return;
-
-    world.figures.remove(selectedFigure);
-    setSelectedFigure(null);
-    readFigures(world);
-  };
-
-  const copyFigures = () => {
-    const world = worldRef.current;
-    if (!world || figures.length === 0) return;
-
-    const text = world.figures.export();
-    console.info(`\n${text}`);
-    void navigator.clipboard.writeText(text).then(
-      () => setFiguresCopied(true),
-      () => setFiguresCopied(false),
-    );
-  };
-
-  /**
-   * Пишет расстановку в `src/data/world-figures.ts` через дев-ручку.
-   *
-   * После записи страница перезагружается: мир должен подняться из файла, а не
-   * из черновика — иначе непонятно, что сохранилось, а что просто лежит в
-   * `localStorage`. Черновик перед этим забывается, он уже не нужен.
-   */
-  const saveFigures = () => {
-    const world = worldRef.current;
-    if (!world) return;
-
-    setFiguresSaving('идёт');
-    void fetch('/api/dev/figures', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(world.figures.placed()),
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(await response.text());
-        setFiguresSaving('готово');
-        world.figures.clear();
-        // Даём кнопке показать «Сохранено», прежде чем страница уедет.
-        setTimeout(() => window.location.reload(), 400);
-      })
-      .catch((error: unknown) => {
-        console.error('расстановка не сохранилась', error);
-        setFiguresSaving('ошибка');
-      });
-  };
-
-  /**
-   * Включает и выключает правку.
-   *
-   * На входе камера забирается у рига: он держит взгляд на станции, а править
-   * расстановку, глядя в одну точку, нельзя. На выходе камеру не трогаем —
-   * человек сам решит, куда лететь дальше.
-   */
-  const toggleEditing = (next: boolean) => {
-    setEditing(next);
-    setPlacing(false);
-    setSelectedFigure(null);
-
-    const world = worldRef.current;
-    if (!world || !next) return;
-
-    world.rig.cancel();
-    world.rig.setStationLook(false);
-    world.setControlMode('orbit');
-    setFigures([...world.figures.placed()]);
-    setPatrols(world.figures.patrols().map(({ id, height }) => ({ id, height })));
-    setBattles(world.figures.battles().map(({ id }) => ({ id })));
-  };
-
-  /** Подводит камеру к выбранной фигуре. */
-  const goToFigure = (id: string | null = selectedFigure) => {
-    const world = worldRef.current;
-    if (world && id) world.figures.goTo(id);
-  };
-
-  /**
-   * Шаг по списку фигур с переездом камеры.
-   *
-   * Список идёт в том же порядке, что и расстановка в данных: башни, входы,
-   * лагеря, постройки. Обход по кругу — чтобы после последней снова была первая.
-   */
-  const stepFigure = (delta: number) => {
-    const world = worldRef.current;
-    if (!world || figures.length === 0) return;
-
-    const at = figures.findIndex((figure) => figure.id === selectedFigure);
-    const next = figures[(at + delta + figures.length) % figures.length]!;
-
-    setSelectedFigure(next.id);
-    world.figures.adopt(next.id);
-    world.figures.goTo(next.id);
-  };
-
-  const dropFigures = () => {
-    const world = worldRef.current;
-    if (!world) return;
-
-    world.figures.clear();
-    setSelectedFigure(null);
-    readFigures(world);
-  };
-
-  /*
-   * Горячие клавиши подбора. `[` и `]` заняты разбором книги, поэтому рост
-   * сидит на запятой с точкой — соседних клавишах под теми же пальцами.
-   */
-  useEffect(() => {
-    if (!figureTuning || !editing || !selectedFigure) return;
-
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
-
-      const world = worldRef.current;
-      const figure = world?.figures.list().find((item) => item.id === selectedFigure);
-      if (!world || !figure) return;
-
-      const turn = (delta: number) =>
-        world.figures.tweak(figure.id, { turn: figure.turn + delta });
-      const size = (factor: number) =>
-        world.figures.tweak(figure.id, { height: figure.height * factor });
-
-      switch (event.key.toLowerCase()) {
-        case 'q':
-          turn(-Math.PI / 16);
-          break;
-        case 'e':
-          turn(Math.PI / 16);
-          break;
-        case ',':
-          size(1 / 1.25);
-          break;
-        case '.':
-          size(1.25);
-          break;
-        case 'delete':
-        case 'backspace':
-          world.figures.remove(figure.id);
-          setSelectedFigure(null);
-          break;
-        default:
-          return;
-      }
-
-      setFigures([...world.figures.placed()]);
-      setFiguresCopied(false);
-    };
-
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [figureTuning, editing, selectedFigure]);
-
   return (
     <div
       className={cn(
@@ -651,10 +313,7 @@ export function WorldCanvas({
     >
       <canvas
         ref={canvasRef}
-        onPointerDown={(event) => {
-          setHinted(true);
-          onCanvasPointerDown(event);
-        }}
+        onPointerDown={() => setHinted(true)}
         className={cn(
           'block w-full',
           chrome && !fill ? 'h-[min(60vh,480px)]' : 'h-full',
@@ -666,7 +325,7 @@ export function WorldCanvas({
         )}
       />
 
-      {chrome && !ready ? (
+      {chrome && !ready && !failed ? (
         <div className="bg-surface-1/80 absolute inset-0 grid place-items-center backdrop-blur-sm">
           <div className="w-48">
             <p className="text-2xs text-ink-muted text-center font-mono">
@@ -678,6 +337,27 @@ export function WorldCanvas({
                 style={{ width: `${Math.round(progress * 100)}%` }}
               />
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/*
+        Отказ загрузки. Причина обычно поправимая — сеть, — поэтому здесь не
+        только сообщение, но и способ попробовать снова: перезагрузка страницы
+        поднимает мир с нуля, а частично собранную сцену чинить нечем.
+      */}
+      {chrome && failed ? (
+        <div className="bg-surface-1/80 absolute inset-0 grid place-items-center backdrop-blur-sm">
+          <div className="max-w-72 text-center">
+            <p className="text-ink text-sm">{t('world.failed.title')}</p>
+            <p className="text-2xs text-ink-muted mt-1.5">{t('world.failed.hint')}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="border-line-subtle text-ink-muted hover:text-ink mt-3 rounded-sm border px-2.5 py-1.5 text-xs"
+            >
+              {t('world.failed.retry')}
+            </button>
           </div>
         </div>
       ) : null}
@@ -741,45 +421,11 @@ export function WorldCanvas({
         </p>
       ) : null}
 
-      {probe && chrome && ready ? (
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          {probe.parts.map((part) => (
-            <div
-              key={part.name}
-              className="absolute border"
-              style={{
-                left: `${part.left * 100}%`,
-                top: `${part.top * 100}%`,
-                width: `${(part.right - part.left) * 100}%`,
-                height: `${(part.bottom - part.top) * 100}%`,
-                borderColor: PROBE_PARTS[part.name].color,
-              }}
-            >
-              <span
-                className="text-2xs absolute top-0 left-0 px-1 font-mono"
-                style={{ color: PROBE_PARTS[part.name].color }}
-              >
-                {PROBE_PARTS[part.name].label} {(part.left * 100).toFixed(1)}–
-                {(part.right * 100).toFixed(1)}
-              </span>
-            </div>
-          ))}
-
-          <p className="text-2xs absolute top-11 left-3 rounded-sm bg-black/70 px-2 py-1 font-mono text-white">
-            доля {probe.progress === null ? '—' : probe.progress.toFixed(2)} · [ ] шаг ·
-            \\ отпустить
-          </p>
-        </div>
-      ) : null}
-
       {/*
         Камера, книга и выход собраны в одно меню: три отдельные плашки по
         углам кадра спорили и между собой, и с книгой, которая лежит в правом
         нижнем углу — ровно там, где стояла кнопка «Открыть резюме».
       */}
-      {/* Счётчик кадров — только в разработке: в мире он часть отладки, а не кадра. */}
-      {process.env.NODE_ENV === 'development' && chrome && ready ? <WorldFps /> : null}
-
       {chrome && ready && !resting ? (
         <WorldMenu
           mode={mode}
@@ -793,77 +439,8 @@ export function WorldCanvas({
         />
       ) : null}
 
-      {figureTuning && chrome && ready && !editing ? (
-        <button
-          type="button"
-          onClick={() => toggleEditing(true)}
-          className="border-line-subtle bg-surface-1/85 text-2xs text-ink-muted hover:text-ink absolute right-3 bottom-3 rounded-sm border px-2 py-1 backdrop-blur-sm"
-        >
-          Редактировать расстановку
-        </button>
-      ) : null}
-
-      {figureTuning && chrome && ready && editing ? (
-        <FigureTuner
-          figures={figures}
-          selected={selectedFigure}
-          placing={placing}
-          copied={figuresCopied}
-          onPlacing={setPlacing}
-          onSelect={(id) => {
-            setSelectedFigure(id);
-            const world = worldRef.current;
-            if (!world || !id) return;
-            // Выбор из списка правит ту же фигуру, что и щелчок в кадре.
-            world.figures.adopt(id);
-            world.figures.goTo(id);
-          }}
-          onTweak={tweakFigure}
-          onRemove={removeFigure}
-          onGoTo={() => goToFigure()}
-          patrols={patrols}
-          onGoToPatrol={(id) => worldRef.current?.figures.goToPatrol(id)}
-          battles={battles}
-          onGoToBattle={(id) => worldRef.current?.figures.goToBattle(id)}
-          onStep={stepFigure}
-          onCopy={copyFigures}
-          onSave={saveFigures}
-          saving={figuresSaving}
-          onExit={() => toggleEditing(false)}
-          onClear={dropFigures}
-        />
-      ) : null}
-
-      {/*
-        Панель подбора ракурсов. Текст без словаря намеренно: она не часть
-        продукта и уедет вместе с `dev-shots.ts`, когда точки лягут в данные.
-      */}
-      {tuning && chrome && ready ? (
-        <div className="border-line-subtle bg-surface-1/85 absolute right-3 bottom-3 flex items-center gap-1 rounded-sm border p-1 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={takeShot}
-            className="bg-accent-wash text-accent text-2xs rounded-xs px-2 py-1"
-          >
-            Запомнить ракурс
-          </button>
-          <button
-            type="button"
-            onClick={copyShots}
-            disabled={shots === 0}
-            className="text-ink-muted hover:text-ink text-2xs rounded-xs px-2 py-1 disabled:opacity-40"
-          >
-            {copied ? 'Скопировано' : `Скопировать (${shots})`}
-          </button>
-          <button
-            type="button"
-            onClick={dropShots}
-            disabled={shots === 0}
-            className="text-ink-faint hover:text-ink text-2xs rounded-xs px-2 py-1 disabled:opacity-40"
-          >
-            Очистить
-          </button>
-        </div>
+      {WorldDevOverlay && chrome ? (
+        <WorldDevOverlay world={liveWorld} canvas={canvasRef} ready={ready} />
       ) : null}
     </div>
   );
