@@ -85,7 +85,7 @@ export const sourceTour: SourceEntry[] = deepFreeze([
     title: 'usePointerDrag',
     purpose: 'Перетаскивание и изменение размера на Pointer Events, без библиотек.',
     responsibilities: [
-      'порог до начала жеста — чтобы клик остался кликом',
+      'порог до начала жеста, чтобы клик остался кликом',
       'запись в узел внутри requestAnimationFrame',
       'состояние обновляется один раз, на pointerup',
     ],
@@ -159,9 +159,9 @@ export const sourceTour: SourceEntry[] = deepFreeze([
     responsibilities: [
       'одна ветка на приложение',
       'окно проекта получает слаг через payload',
-      'папка и текстовый файл — узел файловой системы оттуда же',
+      'папка и текстовый файл берут узел файловой системы оттуда же',
     ],
-    note: 'Содержимое подключено статически: весь текст сайта — одно резюме, оно легче рантайма ленивой загрузки. Побочный эффект приятный: всё попадает в серверный HTML.',
+    note: 'Содержимое подключено статически: весь текст сайта укладывается в одно резюме, и оно легче рантайма ленивой загрузки. Побочный эффект приятный: всё попадает в серверный HTML.',
     code: `export function AppContent({ instance }: { instance: WindowInstance }) {
   switch (instance.app) {
     case 'computer':
@@ -211,7 +211,7 @@ export const sourceTour: SourceEntry[] = deepFreeze([
     title: 'Project',
     purpose: 'Контракт проекта в резюме. UI читает только типы из этого файла.',
     responsibilities: [
-      'задача, решение, вклад — раздельно',
+      'задача, решение и вклад раздельно',
       'связь с местом работы через positionId',
       'null там, где в резюме факта нет',
     ],
@@ -331,7 +331,7 @@ export const sourceTour: SourceEntry[] = deepFreeze([
     title: 'Клавиатура в заголовке окна',
     purpose: 'Перемещение окна с клавиатуры.',
     responsibilities: [
-      'шаг 24 px, с Shift — 4 px',
+      'шаг 24 px, с Shift 4 px',
       'заголовок в таб-порядке',
       'жест и клавиатура пишут в одно состояние',
     ],

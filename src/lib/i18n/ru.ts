@@ -79,7 +79,7 @@ export const ru = deepFreeze({
   'motion.animations.off': 'Выключены',
   'motion.animations.keywords': 'анимации движение motion animation',
   'motion.animations.systemNotice':
-    'Система просит уменьшить движение — уровень понижен автоматически',
+    'Система просит уменьшить движение, уровень понижен автоматически',
 
   'motion.windowAnimations.label': 'Анимация окон',
   'motion.windowAnimations.description': 'Появление и закрытие окон',
@@ -204,7 +204,7 @@ export const ru = deepFreeze({
   'common.cancel': 'Отмена',
 
   'close.confirm.title': 'Закрыть окно?',
-  'close.confirm.body': 'Его можно открыть снова из дока — ничего не потеряется.',
+  'close.confirm.body': 'Его можно открыть снова из дока, ничего не потеряется.',
   'close.confirm.submit': 'Закрыть',
 
   'reset.label': 'Сброс настроек',
@@ -267,7 +267,7 @@ export const ru = deepFreeze({
   'arcade.save.submit': 'Сохранить',
   'arcade.save.sending': 'Отправляю…',
   'arcade.save.skip': 'Не сохранять',
-  'arcade.save.errorName': 'Имя — от двух до шестнадцати символов',
+  'arcade.save.errorName': 'Имя от двух до шестнадцати символов',
   'arcade.save.errorRejected': 'Сервер не принял этот результат',
   'arcade.save.errorRate': 'Слишком часто. Попробуйте через минуту',
   'arcade.save.errorUnavailable': 'Таблица результатов недоступна',
@@ -282,12 +282,11 @@ export const ru = deepFreeze({
   'arcade.board.loading': 'Загружаю таблицу…',
   'arcade.board.error': 'Таблица результатов недоступна',
   'arcade.board.retry': 'Повторить',
-  'arcade.board.volatile':
-    'Хранилище не подключено — таблица обнулится при перезапуске',
+  'arcade.board.volatile': 'Хранилище не подключено, таблица обнулится при перезапуске',
 
   'experience.openMap': 'Открыть карту',
 
-  'world.state.soon': 'Трёхмерный мир в разработке — пока план сверху',
+  'world.state.soon': 'Трёхмерный мир в разработке, пока показан план сверху',
   'world.state.motionOff': 'Трёхмерный мир выключен настройкой движения',
   'world.state.smallScreen': 'Трёхмерный мир доступен на широком экране',
   'world.state.noWebgl': 'Браузер не поддерживает WebGL2',
@@ -301,9 +300,13 @@ export const ru = deepFreeze({
   'world.steps.label': 'Шаги по миру',
   'world.steps.back': 'Назад',
   'world.steps.next': 'Дальше',
-  'world.steps.hint': 'Перетащите — осмотреться с места',
+  'world.steps.hint': 'Перетащите, чтобы осмотреться с места',
   'world.steps.toPath': 'На путь',
-  'world.skills.label': 'Накоплено в пути',
+  'world.quality.label': 'Затенение',
+  'world.quality.occlusionOn': 'Мягкое',
+  'world.quality.occlusionOff': 'Простое',
+  'world.quality.hint':
+    'Мягкое добавляет тень в углах и складках. На слабой машине его стоит выключить: это самая дорогая часть кадра.',
   'world.menu.label': 'Меню',
   'world.menu.guide': 'Как здесь всё устроено',
   'world.book.label': 'Книга-резюме',
@@ -314,21 +317,26 @@ export const ru = deepFreeze({
   'world.book.position': 'Разворот',
   'world.book.contents': 'Содержание книги-резюме',
   'world.book.guide.book.title': 'Книга',
-  'world.book.guide.book.1': 'Щелчок по правой странице листает вперёд, по левой — назад.',
-  'world.book.guide.book.2': 'На этом развороте щелчок по левой странице закрывает книгу.',
-  'world.book.guide.book.3': 'Закладка со знаком вопроса возвращает сюда с любой страницы.',
+  'world.book.guide.book.1':
+    'Щелчок по правой странице листает вперёд, а по левой возвращает назад.',
+  'world.book.guide.book.2':
+    'На этом развороте щелчок по левой странице закрывает книгу.',
+  'world.book.guide.book.3':
+    'Закладка со знаком вопроса возвращает сюда с любой страницы.',
   'world.book.guide.book.4':
-    'Закрытый том можно повертеть протяжкой, а с зажатым Shift — переставить в кадре.',
+    'Закрытый том можно повертеть протяжкой, а с зажатым Shift переставить в кадре.',
   'world.book.guide.book.5':
-    'Подчёркнутая строка — ссылка: щелчок открывает её в новой вкладке.',
+    'Подчёркнутая строка ведёт по ссылке: щелчок открывает её в новой вкладке.',
   'world.book.guide.world.title': 'Мир',
-  'world.book.guide.world.1': 'Полоса внизу ведёт по местам работы: «Назад» и «Дальше».',
+  'world.book.guide.world.1':
+    'Полоса внизу ведёт по местам работы: «Назад» и «Дальше».',
   'world.book.guide.world.2': 'Протяжка по миру осматривается с места.',
   'world.book.guide.world.3':
-    'Орбита — камера ходит вокруг точки; от первого лица — WASD или стрелки.',
+    'В орбите камера ходит вокруг точки, от первого лица работают WASD или стрелки.',
   'world.book.guide.world.4': 'Колесо приближает и отдаляет.',
   'world.screen.title': 'Карта карьеры',
-  'world.screen.subtitle': 'Места работы точками, проекты рядом с ними, непройденная вершина впереди.',
+  'world.screen.subtitle':
+    'Места работы точками, проекты рядом с ними, непройденная вершина впереди.',
   'world.screen.back': 'На рабочий стол',
 } as const);
 

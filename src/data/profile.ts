@@ -11,7 +11,7 @@ export const profile: Profile = deepFreeze({
   age: 26,
   summary: [
     'Frontend-разработчик с 4+ годами коммерческого опыта на React и TypeScript. SPA, административные панели, Telegram Web Apps, VK Mini Apps, PWA, MAX: проектирую архитектуру, интегрирую внешние API, оптимизирую производительность.',
-    'Внедряю AI в разработку — пишу собственные Claude Code Skills, MCP-серверы и мультиагентные конфигурации. Изучаю backend, двигаюсь в сторону fullstack.',
+    'Внедряю AI в разработку: пишу собственные Claude Code Skills, MCP-серверы и мультиагентные конфигурации. Изучаю backend, двигаюсь в сторону fullstack.',
   ],
   contacts: [
     {
