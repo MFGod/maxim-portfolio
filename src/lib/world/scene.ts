@@ -69,11 +69,10 @@ import { createBattleTools, type BattleTools } from './dev-battles';
 import { createPatrolTools, type PatrolTools } from './dev-patrols';
 import { createFigures, traceGround } from './figures';
 import { DAY, daylightFor, mixDaylight, type Daylight } from './daylight';
-import { createGuideRay } from './guide-ray';
 import { loadWaves } from './loading';
 import { driftYaw, idlePhase, type IdlePhase } from './idle';
 import { createMarkers } from './markers';
-import { advanceChapter, nextChapter, pathTarget } from './route';
+import { advanceChapter, pathTarget } from './route';
 import {
   applySpread,
   buildMapShell,
@@ -923,15 +922,14 @@ export function createWorld(
   const book = createBook({ renderer, canvas, reducedMotion, locale });
   bookScene.add(book.object);
 
-  // --- Подписи и дорожка ----------------------------------------------------
+  // --- Подписи ---------------------------------------------------------------
 
   /*
-   * Подписи и направляющая дорожка живут в сцене мира, а не в сцене книги.
-   * Книга — предмет в руках, она поверх всего; подпись главы стоит в мире, и
-   * закрыть её книгой правильно: посетитель читает либо мир, либо резюме.
+   * Подписи живут в сцене мира, а не в сцене книги. Книга — предмет в руках,
+   * она поверх всего; подпись главы стоит в мире, и закрыть её книгой
+   * правильно: посетитель читает либо мир, либо резюме.
    */
   const markers = createMarkers(scene);
-  const guideRay = createGuideRay(scene, shellHeightAt);
 
   /**
    * Пройденная глава основного пути.
@@ -1235,7 +1233,6 @@ export function createWorld(
       }
     }
     markers.update(camera);
-    guideRay.update(camera, nextChapter(passed)?.grace ?? null);
 
     advanceIdle(delta);
     advanceLight(delta);
@@ -1297,7 +1294,6 @@ export function createWorld(
     }
 
     markers.dispose();
-    guideRay.dispose();
 
     tornado?.dispose();
     tornado = null;

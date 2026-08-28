@@ -263,8 +263,7 @@ export function clearMarks(scene: THREE.Scene) {
 
   // Материал столбов один на всю группу: его достаточно освободить однажды.
   const line = group.children.find((child) => (child as THREE.Line).isLine) as
-    | THREE.Line
-    | undefined;
+    THREE.Line | undefined;
   (line?.material as THREE.Material | undefined)?.dispose();
 
   scene.remove(group);
