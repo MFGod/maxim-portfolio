@@ -184,7 +184,15 @@ export function applySpread() {
   return { радиусКлеток: radius, мс: +(performance.now() - started).toFixed(1) };
 }
 
-const skipped = (object: THREE.Mesh) =>
+/**
+ * Не рельеф: крона Древа и всё, что помечено листвой.
+ *
+ * Отдаётся наружу, потому что тот же вопрос задаёт опавшая листва: ей надо
+ * знать, на что лист может лечь. Без общего списка ковёр садился на крону
+ * Древа — её верхняя поверхность висит на тридцати юнитах, и лист там честно
+ * находил под собой геометрию.
+ */
+export const notTerrain = (object: THREE.Mesh): boolean =>
   EXCLUDED_MESHES.has(object.name) ||
   EXCLUDED_MATERIALS.test((object.material as THREE.Material | undefined)?.name ?? '');
 
@@ -216,7 +224,7 @@ export function buildMapShell(root: THREE.Object3D, bounds: WorldBounds) {
   root.traverse((node) => {
     const object = node as THREE.Mesh;
     if (!object.isMesh || (object as THREE.InstancedMesh).isInstancedMesh) return;
-    if (skipped(object)) {
+    if (notTerrain(object)) {
       ignored++;
       return;
     }
@@ -351,6 +359,106 @@ export function buildMapShell(root: THREE.Object3D, bounds: WorldBounds) {
     мс: +(performance.now() - started).toFixed(1),
     памятиМб: +((2 * data.byteLength) / 1048576).toFixed(2),
   };
+}
+
+/**
+ * Высота самой земли в точке — без отступа купола и без бокового расширения.
+ *
+ * `shellHeightAt` отвечает на другой вопрос: где камере нельзя. Тот ответ
+ * лежит выше рельефа на `padding` и расширен вбок на `spread`, чтобы камера
+ * не цеплялась за края, — и предмет, положенный по нему, висит над травой.
+ * Здесь берётся исходная сетка, снятая прямо с треугольников карты.
+ *
+ * @returns `null`, если под точкой нет карты
+ */
+export function terrainHeightAt(x: number, z: number): number | null {
+  if (!raw || !field) return null;
+
+  const fx = (x - field.minX) / CELL - 0.5;
+  const fz = (z - field.minZ) / CELL - 0.5;
+  const cx = Math.floor(fx);
+  const cz = Math.floor(fz);
+
+  const at = (ax: number, az: number): number =>
+    !raw || ax < 0 || ax >= field!.cols || az < 0 || az >= field!.rows
+      ? -Infinity
+      : raw[az * field!.cols + ax]!;
+
+  const h00 = at(cx, cz);
+  const h10 = at(cx + 1, cz);
+  const h01 = at(cx, cz + 1);
+  const h11 = at(cx + 1, cz + 1);
+
+  if (
+    h00 === -Infinity ||
+    h10 === -Infinity ||
+    h01 === -Infinity ||
+    h11 === -Infinity
+  ) {
+    const nearest = at(Math.round(fx), Math.round(fz));
+    return nearest === -Infinity ? null : nearest;
+  }
+
+  const tx = fx - cx;
+  const tz = fz - cz;
+
+  // Та же диагональ, что и у купола: клетка режется на два треугольника, и
+  // интерполировать надо по тому из них, в который попала точка.
+  return tx + tz <= 1
+    ? h00 + tx * (h10 - h00) + tz * (h01 - h00)
+    : h11 + (1 - tx) * (h01 - h11) + (1 - tz) * (h10 - h11);
+}
+
+/** Прореженная сетка высот рельефа: то, что можно отдать шейдеру текстурой. */
+export type GroundField = {
+  /** Высоты по строкам, снизу вверх по Z. Без карты под точкой — `-Infinity`. */
+  data: Float32Array;
+  cols: number;
+  rows: number;
+  minX: number;
+  minZ: number;
+  /** Шаг сетки в юнитах мира. */
+  cell: number;
+};
+
+/**
+ * Отдаёт сетку высот, прореженную в `step` раз.
+ *
+ * Полная сетка купола — 479 на 459 клеток по четверти юнита: почти
+ * девятьсот килобайт, и такая точность нужна только камере, которая об эти
+ * клетки тормозит. Листу довольно знать, где земля, с точностью до юнита,
+ * поэтому шаг берётся крупнее.
+ *
+ * @returns `null`, если купол ещё не построен — карта не пришла
+ */
+export function groundField(step = 4): GroundField | null {
+  if (!field) return null;
+
+  const cols = Math.floor((field.cols - 1) / step) + 1;
+  const rows = Math.floor((field.rows - 1) / step) + 1;
+  const data = new Float32Array(cols * rows);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      /*
+       * Из клеток берётся наименьшая, а не средняя: у края обрыва соседние
+       * отличаются на десяток юнитов, и среднее подвесило бы «землю» в
+       * воздухе — лист растворялся бы, не долетев.
+       */
+      let lowest = Infinity;
+
+      for (let dr = 0; dr < step; dr++) {
+        for (let dc = 0; dc < step; dc++) {
+          const value = cellAt(c * step + dc, r * step + dr);
+          if (value !== -Infinity) lowest = Math.min(lowest, value);
+        }
+      }
+
+      data[r * cols + c] = lowest === Infinity ? -Infinity : lowest;
+    }
+  }
+
+  return { data, cols, rows, minX: field.minX, minZ: field.minZ, cell: CELL * step };
 }
 
 const cellAt = (cx: number, cz: number): number =>

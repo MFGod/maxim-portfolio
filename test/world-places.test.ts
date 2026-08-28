@@ -84,7 +84,9 @@ describe('раскладка резюме по миру', () => {
 
   it('порядок глав совпадает с хронологией резюме', () => {
     const chronological = [...experience]
-      .filter((position) => !worldChapters.find((c) => c.positionId === position.id)?.branch)
+      .filter(
+        (position) => !worldChapters.find((c) => c.positionId === position.id)?.branch,
+      )
       .sort((a, b) => a.period.from.localeCompare(b.period.from))
       .map((position) => position.id);
 

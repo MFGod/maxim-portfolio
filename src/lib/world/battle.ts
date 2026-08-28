@@ -106,6 +106,52 @@ const FALL_STAGGER = 0.45;
 /** Сколько длится клип падения, прежде чем тело переходит в лежание. */
 const FALL_CLIP = 1.4;
 
+/**
+ * Через сколько после начала фазы падения валится этот боец.
+ *
+ * Мечники — по очереди вдоль шеренги, маг — после всех.
+ *
+ * Раньше маг падал третьим в ряду просто по своему номеру, и это ломало всю
+ * стычку: он стоял вторым рядом, до него никто не доставал, и падение
+ * читалось как «упал сам». Теперь он последний, и падает ровно в тот миг,
+ * когда до него долетает снаряд вражеского мага (см. `battleBolts`) — цепочка
+ * замыкается.
+ */
+function fallDelay(fighter: { file: number; files: number; mage: boolean }): number {
+  return (fighter.mage ? fighter.files : fighter.file) * FALL_STAGGER;
+}
+
+/**
+ * Период между выстрелами мага, секунды.
+ *
+ * Больше круга размена (2,4): маг не бьёт в ритм мечников, иначе шеренга снова
+ * читается механизмом. За двадцать одну секунду размена выходит по шесть
+ * выстрелов на мага — редко настолько, чтобы каждый был событием, и часто
+ * настолько, чтобы стоящий поодаль не выглядел забытым.
+ */
+export const CAST = 3.2;
+
+/**
+ * Сколько снаряд летит от руки до цели, секунды.
+ *
+ * Заметно меньше периода: снаряды одного мага не должны идти вереницей — в
+ * воздухе всегда не больше одного. Полёт короче трети секунды глаз не успевает
+ * поймать: расстояние здесь всего треть юнита.
+ */
+export const BOLT_FLIGHT = 0.55;
+
+/** Высота руки мага и груди цели, в долях роста. Подобрано по клипу каста. */
+const HAND_HEIGHT = 0.62;
+const CHEST_HEIGHT = 0.55;
+
+/**
+ * Подъём дуги снаряда над прямой, юниты.
+ *
+ * Прямая линия читается лучом, а не брошенным снарядом. Две сотых при росте
+ * бойца 0,117 — заметная дуга и при этом не навесной огонь.
+ */
+const BOLT_ARC = 0.02;
+
 /** Поза бойца: клип и то, как его крутить. */
 export type Pose = {
   clip: FigureClip;
@@ -247,6 +293,32 @@ function strikeDepth(fighter: Fighter, sinceClash: number): number {
   return part < 0.5 ? ease(part * 2) : ease((1 - part) * 2);
 }
 
+/**
+ * Кто напротив: тот, чьё падение победитель видит, а проигравший получает.
+ *
+ * Мечнику — мечник того же номера в шеренге; магу — вражеский маг: они бьют
+ * друг друга через головы строя, и падение мага должно приходить оттуда, а не
+ * ниоткуда. Шеренги бывают разной длины — лишний номер сводится к последнему.
+ */
+function foeOf(battle: WorldBattle, fighter: Fighter): Fighter {
+  const models = fighter.side === -1 ? battle.living.models : battle.undead.models;
+  const mark = fighter.side === -1 ? 'ж' : 'н';
+
+  const wanted = fighter.mage ? models.findIndex(isMage) : fighter.file;
+  const file = wanted >= 0 ? Math.min(wanted, models.length - 1) : models.length - 1;
+  const model = models[file]!;
+
+  return {
+    id: `${battle.id}-${mark}${file + 1}`,
+    model,
+    height: fighter.side === -1 ? battle.living.height : battle.undead.height,
+    side: -fighter.side as -1 | 1,
+    file,
+    files: models.length,
+    mage: isMage(model),
+  };
+}
+
 /** Поза стоящего в строю до схода: нежить просыпается, живые ждут. */
 function readyPose(fighter: Fighter, risen: boolean, at: number): Pose {
   const undead = fighter.side === -1;
@@ -360,16 +432,48 @@ export function battleStep(
   // --- Падение -----------------------------------------------------------
   if (at < fall) {
     const spot = place(battle, clash, across);
+    const wait = at - melee;
 
+    /*
+     * Победитель ликует не раньше, чем упадёт тот, с кем он сошёлся.
+     *
+     * Прежде вся сторона переходила к ликованию с первой секунды фазы, пока
+     * противники ещё стояли на ногах: строй радовался победе над теми, кто
+     * жив. Теперь мечник давит до последнего мига — и добивающий выпад
+     * приходится ровно на падение врага, — а маг держит каст, из которого
+     * вылетает добивающий снаряд.
+     */
     if (!falls) {
-      const undead = fighter.side === -1;
-      return stepOf(fighter, spot, facingEnemy, {
-        clip: undead ? 'Taunt' : 'Cheer',
-        loop: true,
-      });
+      const foeAt = fallDelay(foeOf(battle, fighter));
+
+      if (wait >= foeAt) {
+        const undead = fighter.side === -1;
+        return stepOf(fighter, spot, facingEnemy, {
+          clip: undead ? 'Taunt' : 'Cheer',
+          loop: true,
+        });
+      }
+
+      if (fighter.mage) {
+        return stepOf(fighter, spot, facingEnemy, {
+          clip: 'Spellcasting',
+          loop: true,
+        });
+      }
+
+      // Треугольник выпада, сведённый к мигу падения врага: замах — удар.
+      const left = foeAt - wait;
+      const depth = left > STRIKE ? 0 : ease(1 - left / STRIKE);
+
+      return stepOf(
+        fighter,
+        place(battle, clash + toEnemy * LUNGE * depth, across),
+        facingEnemy,
+        depth > 0 ? { clip: 'Interact', loop: true } : { clip: 'Blocking', loop: true },
+      );
     }
 
-    const since = at - melee - fighter.file * FALL_STAGGER;
+    const since = wait - fallDelay(fighter);
     if (since < 0) {
       return stepOf(fighter, spot, facingEnemy, { clip: 'Blocking', loop: true });
     }
@@ -398,6 +502,138 @@ export function battleStep(
     part < 0.95 ? facingEnemy + Math.PI : facingEnemy,
     part < 0.98 ? { clip: 'Walking_A', loop: true } : { clip: 'Idle', loop: true },
   );
+}
+
+/** Снаряд мага в полёте. */
+export type BattleBolt = {
+  /**
+   * Кто выпустил и какой это выстрел по счёту.
+   *
+   * Устойчив между кадрами: по нему отрисовка узнаёт свой снаряд и не
+   * перекидывает его на чужую траекторию посреди полёта.
+   */
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  /** Доля пути: 0 — только сорвался с руки, 1 — у цели. */
+  part: number;
+  /** Сторона стрелявшего. По ней идёт цвет: у нежити свой, у живых свой. */
+  side: -1 | 1;
+};
+
+/**
+ * Кому этот маг шлёт снаряд.
+ *
+ * Мечнику, а не магу: маг противника стоит вторым рядом, и снаряд, летящий
+ * туда, проходит сквозь передний ряд. Если мечников не осталось — цель любая
+ * из противоположной стороны, лишь бы снаряд не летел в пустоту.
+ */
+function boltTarget(fighters: readonly Fighter[], mage: Fighter): Fighter | null {
+  const enemies = fighters.filter((other) => other.side !== mage.side);
+  const front = enemies.filter((other) => !other.mage);
+  const pool = front.length > 0 ? front : enemies;
+
+  return pool[mage.file % pool.length] ?? null;
+}
+
+/**
+ * Снаряды всех магов стычки в этот миг.
+ *
+ * Как и позы, считаются из времени, а не копятся состоянием: тот же миг даёт
+ * те же снаряды, и пауза со сном ноутбука ничего не рвёт.
+ *
+ * Только в размене: до схода маг ещё идёт, а после — либо падает, либо
+ * ликует. Стороны стреляют вразнобой — сдвиг на полпериода, — иначе оба
+ * снаряда всегда встречаются ровно посередине.
+ *
+ * @param seconds общее время мира; сдвиг фазы стычки прибавляется внутри
+ */
+export function battleBolts(battle: WorldBattle, seconds: number): BattleBolt[] {
+  const { cycle, at } = battleCycle(seconds, battle.offset);
+
+  const approach = PHASES.rise + PHASES.approach;
+  const melee = approach + PHASES.melee;
+  const fall = melee + PHASES.fall;
+
+  const fighters = battleFighters(battle);
+  const bolts: BattleBolt[] = [];
+
+  /** Снаряд от мага к цели: место по доле пути и дуга над прямой. */
+  const shotAt = (
+    mage: Fighter,
+    target: Fighter,
+    part: number,
+    id: string,
+  ): BattleBolt => {
+    const from = place(battle, clashLine(mage), fileOffset(mage));
+    const to = place(battle, clashLine(target), fileOffset(target));
+
+    const fromY = from.y + mage.height * HAND_HEIGHT;
+    const toY = to.y + target.height * CHEST_HEIGHT;
+
+    return {
+      id,
+      x: from.x + (to.x - from.x) * part,
+      // Дуга: половина синуса поднимает середину пути и обнуляется на концах.
+      y: fromY + (toY - fromY) * part + Math.sin(Math.PI * part) * BOLT_ARC,
+      z: from.z + (to.z - from.z) * part,
+      part,
+      side: mage.side,
+    };
+  };
+
+  // --- Размен: маги бьют по переднему ряду -------------------------------
+  if (at >= approach && at < melee) {
+    const sinceClash = at - approach;
+
+    for (const mage of fighters) {
+      if (!mage.mage) continue;
+
+      const own = mage.side === -1 ? 0 : CAST / 2;
+      const phase = (((sinceClash - own) % CAST) + CAST) % CAST;
+      if (phase >= BOLT_FLIGHT) continue;
+
+      const target = boltTarget(fighters, mage);
+      if (!target) continue;
+
+      const shot = Math.floor((sinceClash - own) / CAST);
+      bolts.push(
+        shotAt(mage, target, phase / BOLT_FLIGHT, `${mage.id}-${cycle}-${shot}`),
+      );
+    }
+
+    return bolts;
+  }
+
+  /*
+   * --- Падение: добивающий выстрел ---------------------------------------
+   *
+   * Маг проигравших падает последним и не сам по себе: за `BOLT_FLIGHT` до
+   * его падения маг победителей шлёт снаряд, и прилёт совпадает с падением.
+   * Это единственная причина, по которой стоящий вторым рядом вообще может
+   * упасть, — мечники до него не достают.
+   */
+  if (at >= melee && at < fall) {
+    const losing = losingSide(cycle);
+
+    for (const mage of fighters) {
+      if (!mage.mage || mage.side === losing) continue;
+
+      const target = fighters.find((other) => other.side === losing && other.mage);
+      if (!target) continue;
+
+      const hit = melee + fallDelay(target);
+      const phase = at - (hit - BOLT_FLIGHT);
+      if (phase < 0 || phase >= BOLT_FLIGHT) continue;
+
+      bolts.push(
+        shotAt(mage, target, phase / BOLT_FLIGHT, `${mage.id}-${cycle}-добивающий`),
+      );
+    }
+  }
+
+  return bolts;
 }
 
 /** Все бойцы стычки в этот миг. Порядок совпадает с `battleFighters`. */

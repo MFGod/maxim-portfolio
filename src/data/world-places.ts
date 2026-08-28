@@ -121,5 +121,7 @@ export const worldPeak: WorldPoint = deepFreeze([24.9, 14.2, -36]);
 
 /** Главы основного пути в порядке прохождения, без ответвления. */
 export function mainRoute(): WorldChapter[] {
-  return worldChapters.filter((chapter) => !chapter.branch).sort((a, b) => a.order - b.order);
+  return worldChapters
+    .filter((chapter) => !chapter.branch)
+    .sort((a, b) => a.order - b.order);
 }

@@ -31,6 +31,9 @@ type Props = {
   onToggleBook: () => void;
   /** Открыть книгу на развороте подсказок. */
   onGuide: () => void;
+  /** Экранное затенение: мягкая тень в углах. Самая дорогая часть кадра. */
+  occlusion: boolean;
+  onOcclusion: (enabled: boolean) => void;
   /** Куда ведёт выход из мира. Пусто — пункта нет: на столе выходить некуда. */
   homeHref?: string;
 };
@@ -45,6 +48,8 @@ export function WorldMenu({
   bookOpen,
   onToggleBook,
   onGuide,
+  occlusion,
+  onOcclusion,
   homeHref,
 }: Props) {
   const t = useTranslate();
@@ -134,6 +139,38 @@ export function WorldMenu({
               </button>
             ))}
           </div>
+
+          <p className="text-book-ink-muted px-2.5 pt-1 pb-1 font-mono text-[0.6875rem] tracking-wide uppercase">
+            {t('world.quality.label')}
+          </p>
+
+          {/*
+            Тем же сегментом, что и камера: выбор из двух, где видно оба
+            положения сразу. Флажок пришлось бы читать, а этот переключатель
+            узнаётся по соседству с выбором камеры.
+          */}
+          <div className="border-book-rule/60 mb-1 flex gap-0.5 rounded-xs border p-0.5">
+            {([true, false] as const).map((option) => (
+              <button
+                key={String(option)}
+                type="button"
+                aria-pressed={occlusion === option}
+                onClick={() => onOcclusion(option)}
+                className={cn(
+                  'flex-1 rounded-xs px-2 py-1 text-[0.6875rem] whitespace-nowrap transition-colors duration-(--duration-fast)',
+                  occlusion === option
+                    ? 'bg-book-accent text-book-paper'
+                    : 'text-book-ink-muted hover:text-book-ink',
+                )}
+              >
+                {t(option ? 'world.quality.occlusionOn' : 'world.quality.occlusionOff')}
+              </button>
+            ))}
+          </div>
+
+          <p className="text-book-ink-muted px-2.5 pb-1.5 text-[0.6875rem] leading-snug">
+            {t('world.quality.hint')}
+          </p>
 
           <p className="text-book-ink-muted px-2.5 pt-1 pb-1 font-mono text-[0.6875rem] tracking-wide uppercase">
             {t('world.book.label')}

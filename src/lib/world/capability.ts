@@ -40,7 +40,10 @@ export const WORLD_MIN_MEMORY_GB = 4;
 export function worldSupport(environment: WorldEnvironment): WorldSupport {
   if (environment.animations === 'off') return 'motion-off';
 
-  if (environment.viewportWidth !== null && environment.viewportWidth < WORLD_MIN_WIDTH) {
+  if (
+    environment.viewportWidth !== null &&
+    environment.viewportWidth < WORLD_MIN_WIDTH
+  ) {
     return 'small-screen';
   }
 

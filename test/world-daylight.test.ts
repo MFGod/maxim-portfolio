@@ -27,7 +27,7 @@ describe('наборы освещения', () => {
     expect(luma(DUSK.sky)).toBeLessThan(luma(DAY.sky));
     expect(DUSK.ambient.intensity).toBeLessThan(DAY.ambient.intensity);
     expect(DUSK.hemisphere.intensity).toBeLessThan(DAY.hemisphere.intensity);
-    expect(DUSK.sun.intensity).toBeLessThan(DAY.sun.intensity);
+    expect(DUSK.moon.intensity).toBeLessThan(DAY.moon.intensity);
   });
 
   it('в сумерках светящееся светит сильнее', () => {
@@ -62,11 +62,55 @@ describe('наборы освещения', () => {
     }
   });
 
-  it('солнце сумерек теплее дневного', () => {
-    // Холодный ключевой свет сделал бы из сумерек ночь.
+  it('в сумерках звёзды ярче, а днём не гаснут совсем', () => {
+    /*
+     * Небо мира сумеречно-синее даже в светлой теме, и пустота над ним
+     * читается провалом. Поэтому днём звёзды бледнеют, а не исчезают.
+     */
+    expect(DAY.stars).toBeGreaterThan(0);
+    expect(DAY.stars).toBeLessThan(DUSK.stars);
+  });
+
+  it('и диск, и свет луны холодные в обоих наборах', () => {
+    /*
+     * Тёплый лунный свет — это солнце: он красит склоны закатом, а в небе при
+     * этом висит холодный диск, и кадр перестаёт сходиться. Тепло сумеркам
+     * дают не лучи, а эмиссия крон, костров и благодати.
+     */
     const warmth = (color: number) => ((color >> 16) & 0xff) - (color & 0xff);
 
-    expect(warmth(DUSK.sun.color)).toBeGreaterThan(warmth(DAY.sun.color));
+    for (const set of [DAY, DUSK]) {
+      expect(warmth(set.moon.disc)).toBeLessThanOrEqual(0);
+      expect(warmth(set.moon.color)).toBeLessThanOrEqual(0);
+    }
+  });
+
+  it('дневной диск бледнее сумеречного: днём небо ведёт, а не светило', () => {
+    expect(luma(DAY.moon.disc)).toBeLessThan(luma(DUSK.moon.disc));
+  });
+
+  it('луна светит сильнее заполнения — иначе тени не видно', () => {
+    /*
+     * Ровно та причина, по которой теней в мире было не разглядеть: полусфера
+     * стояла выше ключевого света (2.6 против 2.2 днём, 1.35 против 0.95 в
+     * сумерках) и подсвечивала тень почти до яркости освещённой стороны.
+     * Заполнение обязано оставаться заполнением.
+     */
+    for (const set of [DAY, DUSK]) {
+      expect(set.moon.intensity).toBeGreaterThan(set.hemisphere.intensity);
+      expect(set.moon.intensity).toBeGreaterThan(set.ambient.intensity);
+    }
+  });
+
+  it('лунный свет остаётся ключевым: тень не тонет в заполнении', () => {
+    /*
+     * Ключевой свет сильнее заполняющего — то самое правило, ради которого в
+     * своё время перевернули набор из форка. Ниже 0.9 в сумерках тень
+     * перестаёт отличаться от освещённой стороны, и рельеф разваливается на
+     * плоские пятна.
+     */
+    expect(DUSK.moon.intensity).toBeGreaterThanOrEqual(0.9);
+    expect(DAY.moon.intensity).toBeGreaterThan(DAY.ambient.intensity);
   });
 });
 

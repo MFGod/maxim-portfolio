@@ -66,7 +66,8 @@ function funnelAxis(geometry: THREE.BufferGeometry): { x: number; z: number } {
   }
 
   // Вырожденный случай — плоская геометрия: тогда центр ящика не хуже.
-  if (counted === 0) return { x: (box.min.x + box.max.x) / 2, z: (box.min.z + box.max.z) / 2 };
+  if (counted === 0)
+    return { x: (box.min.x + box.max.x) / 2, z: (box.min.z + box.max.z) / 2 };
 
   return { x: sumX / counted, z: sumZ / counted };
 }
@@ -153,7 +154,13 @@ export function attachTornado(scene: THREE.Object3D): Tornado | null {
   const base = debris ? Float32Array.from(debris.instanceMatrix.array) : null;
 
   if (debris && base) {
-    debris.boundingSphere = sweptSphere(base, debris.count, debris.geometry, world.x, world.z);
+    debris.boundingSphere = sweptSphere(
+      base,
+      debris.count,
+      debris.geometry,
+      world.x,
+      world.z,
+    );
   }
 
   const pivot = new THREE.Matrix4();

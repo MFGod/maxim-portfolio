@@ -34,6 +34,7 @@ import type { WorldPatrol } from '@/data/world-patrols';
 
 import { WORLD_ASSETS } from './assets';
 import {
+  battleBolts,
   battleFighters,
   battleRadius,
   battleStep,
@@ -42,6 +43,7 @@ import {
   type WorldBattle,
 } from './battle';
 import { walkerStep } from './patrol';
+import { createSpells } from './spells';
 
 /** Дальше этого расстояния до камеры анимация не считается. */
 export const ANIMATION_RANGE = 6;
@@ -237,6 +239,12 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
   const walkers: Walker[] = [];
   const warriors: Warrior[] = [];
   let battles: readonly WorldBattle[] = [];
+  /*
+   * Снаряды магов. Заводятся сразу, а не вместе со стычками: спрайтов до
+   * первого выстрела не появляется, а проверять «есть ли уже набор» на каждом
+   * кадре дороже, чем держать пустую группу.
+   */
+  const spells = createSpells(object);
   /** Общее время хода дозоров. Растёт только когда мир не в покое. */
   let marching = 0;
 
@@ -268,6 +276,9 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
     }
     warriors.length = 0;
     battles = [];
+    // Снаряды снимаются вместе с бойцами: без этого последний залп остаётся
+    // висеть в воздухе над опустевшей поляной.
+    spells.update([]);
   }
 
   function clearWalkers() {
@@ -499,7 +510,7 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
     advanceBattles();
   }
 
-  /** Двигает стычки: место, разворот и поза каждого бойца. */
+  /** Двигает стычки: место, разворот и поза каждого бойца, снаряды магов. */
   function advanceBattles() {
     for (const warrior of warriors) {
       const step = battleStep(warrior.battle, warrior.fighter, marching);
@@ -507,6 +518,9 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
       warrior.root.rotation.y = step.heading;
       applyPose(warrior, step.pose);
     }
+
+    const bolts = battles.flatMap((battle) => battleBolts(battle, marching));
+    spells.update(bolts);
   }
 
   /** Двигает дозоры. Вынесено из `update`: ход нужен и при первой расстановке. */
@@ -643,6 +657,7 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
       clear();
       clearWalkers();
       clearWarriors();
+      spells.dispose();
       object.removeFromParent();
 
       // Клоны делят геометрию и материалы с загруженной моделью, и общий обход

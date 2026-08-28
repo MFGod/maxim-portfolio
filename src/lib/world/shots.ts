@@ -209,9 +209,12 @@ export function stations(): FlightPoint[] {
     }));
   });
 
-  const peak = [peakRoute.from, ...peakRoute.via, peakRoute.arrival, ...peakRoute.views].map(
-    (shot) => ({ label: 'вершина', shot }),
-  );
+  const peak = [
+    peakRoute.from,
+    ...peakRoute.via,
+    peakRoute.arrival,
+    ...peakRoute.views,
+  ].map((shot) => ({ label: 'вершина', shot }));
 
   return [...entry, ...zones, ...peak];
 }

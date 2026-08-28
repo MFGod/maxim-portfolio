@@ -128,8 +128,9 @@ describe('вход как траектория', () => {
 
   it('идёт от благодати вверх и приходит к первой главе внизу', () => {
     const start = samplePath(entryPath, 0).position;
-    const peak = Array.from({ length: 101 }, (_, step) =>
-      samplePath(entryPath, step / 100).position[1],
+    const peak = Array.from(
+      { length: 101 },
+      (_, step) => samplePath(entryPath, step / 100).position[1],
     ).reduce((max, value) => Math.max(max, value), -Infinity);
     const end = samplePath(entryPath, 1).position;
 
@@ -166,9 +167,10 @@ function aiming(keys: PathKey[], durationMs = flightDuration(keys)) {
   for (let index = 1; index <= frames; index++) {
     const before = directions[index - 1]!.unit;
     const after = directions[index]!.unit;
-    const cos = before[0]! * after[0]! + before[1]! * after[1]! + before[2]! * after[2]!;
+    const cos =
+      before[0]! * after[0]! + before[1]! * after[1]! + before[2]! * after[2]!;
 
-    speeds.push(((Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI) / step);
+    speeds.push((Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI / step);
   }
 
   const mean = speeds.reduce((sum, value) => sum + value, 0) / speeds.length;

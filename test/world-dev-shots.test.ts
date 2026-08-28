@@ -105,7 +105,9 @@ describe('снимки камеры', () => {
   });
 
   it('о неизвестном снимке сообщает, а не молчит', () => {
-    expect(applyShot('нет такого', cameraAt([0, 0, 0], [0, 0, -1]), target([0, 0, 0]))).toBeNull();
+    expect(
+      applyShot('нет такого', cameraAt([0, 0, 0], [0, 0, -1]), target([0, 0, 0])),
+    ).toBeNull();
     expect(removeShot('нет такого')).toBe(false);
   });
 
@@ -169,9 +171,7 @@ describe('выгрузка в данные', () => {
 
   it('печатает строку, готовую к вставке', () => {
     saveShot(cameraAt([1, 2, 3], [1, 2, -17]), target([1, 2, -17]), 'вход');
-    expect(exportShots()).toBe(
-      "  { id: 'вход', at: [1, 2, 3], look: [1, 2, -17] },",
-    );
+    expect(exportShots()).toBe("  { id: 'вход', at: [1, 2, 3], look: [1, 2, -17] },");
   });
 
   it('апостроф в имени не рвёт литерал', () => {

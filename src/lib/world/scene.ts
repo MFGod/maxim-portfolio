@@ -63,7 +63,7 @@ import {
   saveShot,
   type CameraShot,
 } from './dev-shots';
-import { figureToolsEnabled, shotToolsEnabled } from './dev-tools';
+import { figureTools, shotTools } from './dev-tools';
 import { createCrowdTools, type CrowdTools } from './dev-crowd';
 import { createBattleTools, type BattleTools } from './dev-battles';
 import { createPatrolTools, type PatrolTools } from './dev-patrols';
@@ -71,12 +71,16 @@ import { createFigures, traceGround } from './figures';
 import { DAY, daylightFor, mixDaylight, type Daylight } from './daylight';
 import { loadWaves } from './loading';
 import { driftYaw, idlePhase, type IdlePhase } from './idle';
-import { createMarkers } from './markers';
+import { createErdlight } from './erdlight';
+import { createFallen, waterSurface, type Fallen } from './fallen';
+import { createLeaves, crownsOf, treesOf } from './leaves';
+import { createMoon, type Moon } from './moon';
 import { advanceChapter, pathTarget } from './route';
 import {
   applySpread,
   buildMapShell,
   buildShellMesh,
+  groundField,
   setShellPockets,
   shellHeightAt,
   shellSettings,
@@ -84,6 +88,7 @@ import {
 import { buildObstacleField, clearObstacleField, obstacleHeightAt } from './obstacles';
 import { attachPots, type Pots } from './pots';
 import { flightPath, peakFlight, worldPockets } from './shots';
+import { createStars } from './stars';
 import { attachTornado, type Tornado } from './tornado';
 import { createWater } from './water';
 import { createWind, isWindy } from './wind';
@@ -124,6 +129,13 @@ export type WorldOptions = {
    */
   onChapter?: (positionId: string | null) => void;
   /**
+   * Книгу раскрыли или закрыли.
+   *
+   * Щелчок по тому ловит сама книга, а не оболочка: без этого сообщения нижняя
+   * дорожка глав оставалась бы на кадре под раскрытым разворотом.
+   */
+  onBook?: (opened: boolean) => void;
+  /**
    * Мир ушёл в облёт или вернулся из него.
    *
    * Хранителю экрана нужен пустой кадр: панели поверх ролика читаются
@@ -151,6 +163,18 @@ export type World = {
    * Прогресс считает мир, а не интерфейс: до главы доходят и пешком, минуя
    * нижнюю полосу. Интерфейсу остаётся спросить, куда лететь.
    */
+  /**
+   * Экранное затенение: мягкая тень в углах и щелях.
+   *
+   * Вынесено в переключатель, потому что это самая дорогая часть кадра —
+   * замер на M4 даёт 8.8 мс из 21.4, сорок один процент. Посетителю на слабой
+   * машине выгоднее отдать эти миллисекунды плавности; проба качества гасит
+   * затенение и сама, но её решение можно перебить вручную.
+   */
+  occlusion: {
+    readonly enabled: boolean;
+    set: (enabled: boolean) => void;
+  };
   /**
    * Перекладывает свет под текущую тему портфолио.
    *
@@ -312,6 +336,16 @@ const FRAME_MS = 1000 / 60;
 /** Через столько кадров решаем, тянет ли машина тени и полную постобработку. */
 const PROBE_FRAMES = 100;
 
+/**
+ * Сколько первых кадров проба пропускает.
+ *
+ * На них компилируются шейдерные программы, заливаются текстуры и строится
+ * карта теней: они дороже установившихся в разы и говорят не о машине, а о
+ * старте. Замеряя их, проба видела «медленно» даже там, где кадр укладывается
+ * вдвое, и резала качество зря.
+ */
+const PROBE_WARMUP = 40;
+
 /** Средний кадр дольше этого — машина не тянет, снижаем качество AO. */
 const SLOW_FRAME_SECONDS = 0.025;
 
@@ -338,6 +372,7 @@ export function createWorld(
     locale,
     theme,
     onChapter,
+    onBook,
     onRest,
   } = options;
 
@@ -384,9 +419,26 @@ export function createWorld(
   renderer.setClearColor(0x000000);
   renderer.info.autoReset = false;
 
+  /**
+   * Потолок площади кадра в пикселях.
+   *
+   * Замер на M4: тот же кадр стоит 23.6 мс при множителе 1.5 и 18.5 при 1.0 —
+   * пять миллисекунд из двадцати трёх уходят на пиксели, которых на экране
+   * ретины никто не считает. Потолок бьёт только по большим канвасам: окно
+   * 1262×702 при множителе 1.5 даёт 2.0 Мпикс и проходит, полноэкранный
+   * 1893×1053 — 4.5 Мпикс и получает множитель пониже.
+   */
+  const PIXEL_BUDGET = 2_400_000;
+
   const applySize = () => {
     const { width, height } = size();
-    const ratio = Math.min(window.devicePixelRatio, 1.5);
+    /*
+     * Множитель — наименьшее из трёх: плотность экрана, потолок 1.5 и то, что
+     * укладывается в бюджет площади. Ниже единицы не опускаемся: там начинается
+     * не экономия, а мыло.
+     */
+    const budget = Math.sqrt(PIXEL_BUDGET / (width * height));
+    const ratio = Math.max(Math.min(window.devicePixelRatio, 1.5, budget), 1);
 
     renderer.setPixelRatio(ratio);
     renderer.setSize(width, height, false);
@@ -460,23 +512,165 @@ export function createWorld(
   const ambient = new THREE.AmbientLight(DAY.ambient.color, DAY.ambient.intensity);
   scene.add(ambient);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+  /*
+   * Ключевой свет — лунный: то же направление, что у диска в небе, и тот же
+   * холодный цвет. Диск ставится по этому же вектору (см. `createMoon` ниже),
+   * поэтому тень в кадре всегда лежит от того светила, которое видно.
+   */
+  const dirLight = new THREE.DirectionalLight(DAY.moon.color, DAY.moon.intensity);
   dirLight.castShadow = true;
-  dirLight.shadow.radius = 25;
-  dirLight.shadow.blurSamples = 25;
-  dirLight.shadow.bias = -0.0001;
-  dirLight.shadow.mapSize.width = 4096;
-  dirLight.shadow.mapSize.height = 4096;
+  /*
+   * Мягкость тени — пять, а не двадцать пять.
+   *
+   * При двадцати пяти тень размазывалась до неразличимости: под кроной
+   * оставалось пятно чуть темнее травы, и мир читался плоским. Пять оставляет
+   * край мягким, но тень — тенью.
+   */
+  dirLight.shadow.radius = 5;
+  dirLight.shadow.blurSamples = 8;
+  /*
+   * Карта теней считается один раз, а не каждый кадр.
+   *
+   * Луна в мире неподвижна, ветер до карты теней не доходит (её материал
+   * глубины — своя подмена, см. `wind.ts`), а движущиеся фигуры ростом 0.117
+   * тени почти не отбрасывают. Замер: пересчёт каждый кадр стоил 22.3 мс
+   * против 18.2 мс с разовым — четыре миллисекунды даром.
+   */
+  dirLight.shadow.autoUpdate = false;
+  dirLight.shadow.needsUpdate = true;
+  /*
+   * Смещение глубины: пока карта не отбрасывала тень, хватало одного `bias`.
+   *
+   * С тенью от самого рельефа он перестал спасать. Земля здесь разбита на
+   * мелкие треугольники с плоскими нормалями, и каждый затенял сам себя:
+   * вблизи трава покрывалась ровной сеткой, а на пологих склонах — широкими
+   * полосами. Лечит это `normalBias` — он отодвигает точку вдоль нормали, а не
+   * вдоль луча.
+   *
+   * Подобрано вживую по макро-кадру травы: на 0.03 сетка видна целиком, на
+   * 0.05 слабеет, и только к 0.12 уходит. Столько же — примерно рост фигуры
+   * (0.117), и это верхний предел: дальше от предмета начинает отрываться его
+   * собственная тень.
+   */
+  dirLight.shadow.bias = -0.0004;
+  dirLight.shadow.normalBias = 0.12;
+  /*
+   * Размер карты теней: восемь тысяч текселей там, где машина тянет
+   * постобработку, четыре — где нет.
+   *
+   * Дело в ступени на краю тени. Окно карты в осях наклонного света выходит
+   * 168 × 137 юнитов, и на 4096 это 0.041 юнита на тексель — вблизи край тени
+   * читается лесенкой. Вдвое больше текселей делают ступень вдвое мельче
+   * (0.021), и это единственный способ, который здесь сработал: `radius` при
+   * PCF не действует вовсе (мягкий вариант объявлен устаревшим и подменяется
+   * жёстким), а `VSMShadowMap` даёт мягкий край, но вместе с ним — волнистые
+   * разводы на пологой траве.
+   *
+   * Плата — видеопамять: 8192² глубины это около 268 МБ против 67. Поэтому
+   * размер идёт за тем же признаком, что и постобработка: слабой машине
+   * достаётся прежняя карта, и тени на ней всё равно гаснут первыми.
+   *
+   * Времени это почти не стоит: карта снимается дважды за загрузку, замер
+   * пересъёмки — 27 мс.
+   */
+  const shadowMapSize = postProcessing ? 8192 : 4096;
+  dirLight.shadow.mapSize.width = shadowMapSize;
+  dirLight.shadow.mapSize.height = shadowMapSize;
   dirLight.position.set(18, 40, 10);
   dirLight.target.position.set(-20, 0, -20);
-  dirLight.shadow.camera.near = 0.2;
-  dirLight.shadow.camera.far = 120;
-  dirLight.shadow.camera.left = -100;
-  dirLight.shadow.camera.bottom = -80;
-  dirLight.shadow.camera.right = 80;
-  dirLight.shadow.camera.top = 120;
   dirLight.frustumCulled = false;
   scene.add(dirLight);
+  // Цель — в графе сцены: без неё `three` не обновляет её матрицу и считает,
+  // что свет смотрит в начало координат.
+  scene.add(dirLight.target);
+
+  /**
+   * Высоты, между которыми лежит всё, что отбрасывает тень.
+   *
+   * Считать по настоящему габариту сцены нельзя: ствол Эрдтри уходит вверх на
+   * добрую сотню юнитов, и окно, растянутое на него, потеряло бы плотность.
+   * Тридцать юнитов — выше любой стены Лейндела и любой кроны, шесть вниз —
+   * ниже дна.
+   */
+  const SHADOW_SPAN = { low: -6, high: 30 };
+
+  /**
+   * Подгоняет окно карты теней под весь мир.
+   *
+   * Раньше границы стояли числами, и это было неверно дважды. Симметричное
+   * окно предполагает, что мир центрирован около начала координат, — а он
+   * лежит от −48 до 71.7 по X и от −76.6 до 38.2 по Z. И окно задаётся не в
+   * мировых осях, а в осях света, который смотрит наискось: даже верно
+   * подобранный по X и Z квадрат оказывается повёрнутым.
+   *
+   * Замер прежнего окна ±62: из восьми углов мира в него попадали три. Северо-
+   * запад, восток и юго-восток лежали снаружи — там теней не было вовсе, ни от
+   * рельефа, ни от деревьев.
+   *
+   * Поэтому границы считаются: восемь углов мира переводятся в оси света, и
+   * окно берётся по их размаху. Оно же само собой сжимается до минимума —
+   * плотность текселей выходит наибольшая из возможных для этой карты.
+   */
+  const fitShadowToWorld = () => {
+    const camera = dirLight.shadow.camera;
+
+    // Матрица света вручную: рендерер обновит её только в момент съёмки карты,
+    // а границы нужны заранее.
+    const orientation = new THREE.Matrix4().lookAt(
+      dirLight.position,
+      dirLight.target.position,
+      new THREE.Vector3(0, 1, 0),
+    );
+    const toWorld = new THREE.Matrix4()
+      .makeRotationFromQuaternion(
+        new THREE.Quaternion().setFromRotationMatrix(orientation),
+      )
+      .setPosition(dirLight.position);
+    const toLight = toWorld.clone().invert();
+
+    const corner = new THREE.Vector3();
+    let left = Infinity;
+    let right = -Infinity;
+    let bottom = Infinity;
+    let top = -Infinity;
+    let near = Infinity;
+    let far = -Infinity;
+
+    for (const x of [MAP_BOUNDS.minX, MAP_BOUNDS.maxX]) {
+      for (const y of [SHADOW_SPAN.low, SHADOW_SPAN.high]) {
+        for (const z of [MAP_BOUNDS.minZ, MAP_BOUNDS.maxZ]) {
+          corner.set(x, y, z).applyMatrix4(toLight);
+
+          left = Math.min(left, corner.x);
+          right = Math.max(right, corner.x);
+          bottom = Math.min(bottom, corner.y);
+          top = Math.max(top, corner.y);
+          // Камера света смотрит вдоль −Z: глубина — это минус координата.
+          near = Math.min(near, -corner.z);
+          far = Math.max(far, -corner.z);
+        }
+      }
+    }
+
+    /*
+     * Запас в два юнита по краям: границы мира — это границы обрезки, а
+     * геометрия у самого края доходит до них вплотную, и окно впритык роняло
+     * бы её тень на последних текселях.
+     */
+    const PAD = 2;
+
+    camera.left = left - PAD;
+    camera.right = right + PAD;
+    camera.bottom = bottom - PAD;
+    camera.top = top + PAD;
+    // Ближнюю плоскость не поднимаем к самому первому углу: свет стоит выше
+    // мира, и запас в юнит дешевле, чем срезанная верхушка стены.
+    camera.near = Math.max(0.5, near - 1);
+    camera.far = far + 1;
+    camera.updateProjectionMatrix();
+  };
+
+  fitShadowToWorld();
 
   const hemiLight = new THREE.HemisphereLight(
     DAY.hemisphere.sky,
@@ -529,6 +723,26 @@ export function createWorld(
   scene.background = new THREE.Color(DAY.sky);
   scene.fog = new THREE.Fog(DAY.sky, DAY.fog.near, DAY.fog.far);
 
+  /**
+   * Диск луны. Заводится ниже, вместе с подписями, но объявлен здесь: набор
+   * освещения перекрашивает его, а первый набор ставится раньше, чем диск
+   * появляется, — обращение к ещё не созданной `const` уронило бы сцену.
+   */
+  let moon: Moon | null = null;
+
+  /*
+   * Звёзды заводятся здесь же, до первого набора освещения: их яркость ведёт
+   * тот же набор, и `const` ниже по файлу оказалась бы недоступна.
+   */
+  const stars = createStars(scene);
+
+  /*
+   * Золотые источники под кронами — здесь же и по той же причине: их силу ведёт
+   * набор освещения. Пул заводится пустым, до прихода карты: новый источник
+   * пересобирает шейдеры всех материалов, и платить этим лучше на загрузке.
+   */
+  const erdlight = createErdlight(scene);
+
   /** Ставит набор освещения целиком. */
   const applyDaylight = (value: Daylight) => {
     (scene.background as THREE.Color).setHex(value.sky);
@@ -543,10 +757,14 @@ export function createWorld(
     hemiLight.groundColor.setHex(value.hemisphere.ground);
     hemiLight.intensity = value.hemisphere.intensity;
 
-    dirLight.color.setHex(value.sun.color);
-    dirLight.intensity = value.sun.intensity;
+    dirLight.color.setHex(value.moon.color);
+    dirLight.intensity = value.moon.intensity;
+    moon?.setColor(value.moon.disc);
+    stars.setLight(value.stars);
 
     minorErdtree.emissiveIntensity = value.emissive.erdtree;
+    // Свет от кроны идёт за её же эмиссией: ночью золото ярче, днём бледнее.
+    erdlight.setLight(value.emissive.erdtree);
     fire.emissiveIntensity = value.emissive.fire;
     grace.emissiveIntensity = value.emissive.grace;
   };
@@ -601,23 +819,14 @@ export function createWorld(
   bloomPass.radius = 0.8;
 
   const gtaoPass = new GTAOPass(scene, camera, size().width, size().height);
-  gtaoPass.output = GTAOPass.OUTPUT.Default;
 
   /*
-   * Буфер нормалей должен видеть и обратные грани.
-   *
-   * `GTAOPass` считает нормали, подменяя материал всей сцены своим
-   * `MeshNormalMaterial`, а у того по умолчанию `FrontSide`. Грань, отвернутая
-   * от камеры, из буфера выпадает целиком, и проход считает затенение по тому,
-   * что **за** ней, — сквозь поверхность проступает силуэт дальней геометрии.
-   *
-   * Поймано это было на листающемся листе книги, который после 90° встаёт к
-   * камере изнанкой. Книга с тех пор рисуется своей сценой и своим проходом и
-   * сюда не попадает, но правка остаётся: материалы мира двусторонние
-   * (`doubleSided: true` во всех 148 материалах `map.glb`), и их обратные грани
-   * ровно так же обязаны быть в буфере.
+   * Половинное разрешение затенения здесь пробовалось и убрано: на тридцати
+   * кадрах разница составила 0.3–0.7 мс при разбросе замера в две — то есть
+   * ничего. Цена прохода не в пикселях: он заново рисует всю геометрию сцены
+   * в буфер нормалей — 255 отрисовок и 6.18 млн треугольников, ровно столько
+   * же, сколько в основном проходе.
    */
-  gtaoPass.normalMaterial.side = THREE.DoubleSide;
 
   const wind = createWind();
   // Проход подменяет материалы всей сцены своим, и без этого патча затемнение
@@ -646,6 +855,34 @@ export function createWorld(
     rings: 1,
     samples: 2,
   });
+
+  /**
+   * Что не участвует в карте нормалей затенения.
+   *
+   * `GTAOPass` подменяет материал всей сцены своим и про отсечение по альфе не
+   * знает: у листа на земле в буфер нормалей попадает весь квадрат плоскости,
+   * а не силуэт. Вокруг каждого лежащего листа от этого стоял ровный светлый
+   * прямоугольник — тень плитки, которой в кадре нет.
+   *
+   * Прятать на время прохода, а не чинить материал подмены: материал у прохода
+   * один на всю сцену, и текстуру листа в него не занести, не раскрасив ею
+   * рельеф. Затенение от листа толщиной в два сантиметра всё равно ничего не
+   * добавляет — он берёт затенение земли, на которой лежит.
+   */
+  const outsideAmbientOcclusion: THREE.Object3D[] = [];
+
+  const renderOcclusion = gtaoPass.render.bind(gtaoPass);
+  gtaoPass.render = (
+    renderer: THREE.WebGLRenderer,
+    writeBuffer: THREE.WebGLRenderTarget,
+    readBuffer: THREE.WebGLRenderTarget,
+    deltaTime: number,
+    maskActive: boolean,
+  ) => {
+    for (const object of outsideAmbientOcclusion) object.visible = false;
+    renderOcclusion(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+    for (const object of outsideAmbientOcclusion) object.visible = true;
+  };
 
   if (postProcessing) {
     composer.addPass(bloomPass);
@@ -689,13 +926,13 @@ export function createWorld(
      * фигур. Своя проверка флага нужна потому, что подбор ракурсов обычно
      * выключен, а посмотреть бой хочется.
      */
-    if (event.code === 'KeyB' && figureToolsEnabled()) {
+    if (event.code === 'KeyB' && figureTools) {
       const id = goToBattle();
       console.info(id ? `стычка «${id}»` : 'стычек в мире нет');
       return;
     }
 
-    if (!shotToolsEnabled()) return;
+    if (!shotTools) return;
 
     if (event.code === 'KeyS') {
       const shot = saveShot(camera, controls.target);
@@ -771,7 +1008,7 @@ export function createWorld(
     // Утверждённые ракурсы из данных плюс то, что подбирается прямо сейчас.
     // Несохранённые снимки участвуют только при включённом инструменте: иначе
     // чужой `localStorage` пробивал бы дыры в куполе у случайного посетителя.
-    const tuning = shotToolsEnabled() ? pocketsFromShots() : [];
+    const tuning = shotTools ? pocketsFromShots() : [];
     setShellPockets([...worldPockets(), ...tuning]);
   }
 
@@ -791,6 +1028,8 @@ export function createWorld(
   let loaded = false;
   /** Появляется после загрузки: до неё смерча в сцене нет. */
   let tornado: Tornado | null = null;
+  /** Опавшая листва: появляется вместе с кронами, когда придёт карта. */
+  let fallen: Fallen | null = null;
   /** То же и с горшками: их инстанс-меш собирается по приходу матриц. */
   let pots: Pots | null = null;
   manager.onProgress = (_url, done, total) => {
@@ -802,7 +1041,15 @@ export function createWorld(
     scene.add(gltf.scene);
     clipToBounds(gltf.scene, MAP_BOUNDS);
     buildMapShell(gltf.scene, MAP_BOUNDS);
-    setShadow(gltf.scene, false, true);
+    /*
+     * Тайл и отбрасывает тень, и принимает её.
+     *
+     * Прежде карта только принимала: тени шли лишь от инстансов — деревьев и
+     * камней, — а скалы, стены и обрывы не отбрасывали ничего. В мире, где
+     * половина силуэта это развалины Лейндела, отсутствие их теней и читалось
+     * как «теней нет вовсе».
+     */
+    setShadow(gltf.scene, true, true);
     modifyMaterials(gltf.scene);
 
     // Дно красится в зелёный: сквозь полупрозрачную воду оно даёт морю бирюзу.
@@ -858,6 +1105,13 @@ export function createWorld(
   };
 
   /*
+   * Листья заводятся до потока загрузки, а не вместе с подписями: кроны им
+   * раздаёт этот самый поток, а он идёт по файлу выше. Стая до раздачи
+   * невидима — сыпать листья из точки, где ещё нет дерева, не из чего.
+   */
+  const leaves = createLeaves(scene, textureLoader, minorErdtree);
+
+  /*
    * Мир приходит двумя волнами, а не одним пакетом.
    *
    * Раньше первый кадр ждал последний куст: две сотни файлов инстансов висели
@@ -875,9 +1129,51 @@ export function createWorld(
     }
     mark('map');
 
+    /*
+     * Карта теней снимается заново: до этого мига её снимали с пустой сцены.
+     *
+     * Свет заводится в начале, а мир приезжает через секунду. Разовый снимок
+     * (`autoUpdate = false`) успевал сделаться раньше карты и оставался
+     * пустым до конца жизни сцены — теней не было ни от чего. Пересъёмок
+     * ровно столько, сколько волн: одна здесь, вторая после россыпи.
+     */
+    dirLight.shadow.needsUpdate = true;
+
     // Карманы и купол считаются по рельефу, а не по инстансам: можно сразу.
     applyPockets();
     refreshShellMesh();
+
+    // Кроны есть только теперь: до карты сыпать листья неоткуда.
+    const crowns = crownsOf(scene);
+    leaves.seed(crowns);
+    /*
+     * Источникам — деревья, а не кроны: `crownsOf` отдаёт ячейки листвы, и у
+     * крупного дерева их несколько. Листьям это на пользу — золото сыплется по
+     * всей ширине кроны, — а пул из трёх источников уходил в одно дерево целиком.
+     */
+    erdlight.seed(treesOf(scene));
+
+    /*
+     * Ковёр под кронами. Стелется один раз и по точной высоте земли, а не по
+     * куполу камеры: тот лежит выше рельефа, и листва висела бы над травой.
+     */
+    fallen = createFallen(scene, leaves.texture, crowns, scene, waterSurface(scene));
+    outsideAmbientOcclusion.push(fallen.object);
+
+    // Купол уже построен выше — отдаём листьям его высоты, чтобы они таяли
+    // над землёй, а не уходили в неё.
+    /*
+     * Шаг вдвое мельче прежнего: клетка в полюнита вместо юнита.
+     *
+     * Высота в клетке берётся наименьшая — так «земля» не подвисает у обрыва,
+     * — но на склоне это же занижает её на весь перепад внутри клетки. При
+     * клетке в юнит лист успевал подойти к траве вплотную и встать в ней
+     * торчком, потому что спрайт всегда развёрнут к камере. Полклетки
+     * уменьшают занижение вдвое, а поле остаётся мелким: 240 × 230 клеток,
+     * 220 КБ.
+     */
+    const ground = groundField(2);
+    if (ground) leaves.useGround(ground);
 
     const waves = loadWaves();
     await loadInstanced(waves.landmarks);
@@ -907,6 +1203,10 @@ export function createWorld(
     pots = attachPots(scene, { reducedMotion });
 
     renderer.compile(scene, camera);
+
+    // Вторая пересъёмка: россыпь пришла, и теперь в карте теней есть всё.
+    dirLight.shadow.needsUpdate = true;
+
     loaded = true;
     mark('full');
   })();
@@ -919,17 +1219,21 @@ export function createWorld(
    * матрицу она собирает из `camera.matrixWorld` каждый кадр, отчего камера
    * остаётся во владении рига (D3), а книгу можно прятать отдельно от мира.
    */
-  const book = createBook({ renderer, canvas, reducedMotion, locale });
+  const book = createBook({
+    renderer,
+    canvas,
+    reducedMotion,
+    locale,
+    onOpened: (open) => onBook?.(open),
+  });
   bookScene.add(book.object);
 
-  // --- Подписи ---------------------------------------------------------------
-
   /*
-   * Подписи живут в сцене мира, а не в сцене книги. Книга — предмет в руках,
-   * она поверх всего; подпись главы стоит в мире, и закрыть её книгой
-   * правильно: посетитель читает либо мир, либо резюме.
+   * Диск луны ставится по тому же направлению, что и ключевой свет: иначе
+   * тени в кадре лягут не от того источника, который в нём виден.
    */
-  const markers = createMarkers(scene);
+  moon = createMoon(scene, dirLight.position.clone().sub(dirLight.target.position));
+  moon.setColor(lightTo.moon.disc);
 
   /**
    * Пройденная глава основного пути.
@@ -1189,6 +1493,8 @@ export function createWorld(
   let timeTarget = 0;
   let frames = 0;
   let frameSeconds = 0;
+  /** Затенение переключили вручную — проба качества его больше не трогает. */
+  let occlusionLocked = false;
 
   let running = true;
 
@@ -1208,6 +1514,7 @@ export function createWorld(
     figures.update(delta, camera);
     wind.advance(delta);
     water.advance(delta);
+    leaves.advance(delta);
 
     /*
      * Путь считается после рига и до отрисовки: камера уже там, где будет в
@@ -1232,7 +1539,11 @@ export function createWorld(
         onChapter?.(passed);
       }
     }
-    markers.update(camera);
+    moon?.update(camera);
+    stars.update(camera, delta);
+    // После рига: источники ставятся по ближайшим к камере кронам, а камеру
+    // только что подвинули.
+    erdlight.update(camera, delta);
 
     advanceIdle(delta);
     advanceLight(delta);
@@ -1259,16 +1570,44 @@ export function createWorld(
       if (Date.now() >= timeTarget) timeTarget = Date.now();
     }
 
-    // Проба производительности: тени гасим всегда, качество AO — по замеру.
+    /*
+     * Проба производительности: и тени, и качество AO — по замеру.
+     *
+     * Раньше тени гасились безусловно на сотом кадре, на любой машине. Мир от
+     * этого читался плоской заливкой: объём в нём держат ровно они. Теперь
+     * гаснут только там, где средний кадр не уложился в порог.
+     */
     const probe = probeClock.getDelta();
-    if (frames < PROBE_FRAMES && loaded) {
+    if (frames < PROBE_WARMUP + PROBE_FRAMES && loaded) {
       frames++;
-      frameSeconds += probe;
-      if (frames >= PROBE_FRAMES) {
-        renderer.shadowMap.enabled = false;
-        if (frameSeconds / frames > SLOW_FRAME_SECONDS) {
-          aoParameters.samples = 8;
-          gtaoPass.updateGtaoMaterial(aoParameters);
+      // Прогрев в среднее не входит: до него кадр говорит о старте, а не о
+      // машине.
+      if (frames > PROBE_WARMUP) frameSeconds += probe;
+
+      const measured = frameSeconds / PROBE_FRAMES;
+      if (frames >= PROBE_WARMUP + PROBE_FRAMES && measured > SLOW_FRAME_SECONDS) {
+        /*
+         * Деградация ступенями, от дешёвого к дорогому по вкладу в картину.
+         *
+         * Сперва вдвое реже считается затенение — его смягчение почти не
+         * видно. Если и этого мало, гаснут тени: они дают объём, но без них
+         * мир остаётся миром. Затенение выключается последним — по замеру оно
+         * же и самое дорогое (8.6 мс из 18.4), и уходит целой ступенью.
+         */
+        aoParameters.samples = 8;
+        gtaoPass.updateGtaoMaterial(aoParameters);
+
+        if (measured > SLOW_FRAME_SECONDS * 1.6) {
+          renderer.shadowMap.enabled = false;
+        }
+
+        /*
+         * Затенение уходит последним и целой ступенью: по замеру на M4 оно
+         * стоит 8.8 мс из 21.4 — сорок один процент кадра. Без него мир идёт
+         * за 12.6 мс, то есть укладывается в шестьдесят кадров с запасом.
+         */
+        if (measured > SLOW_FRAME_SECONDS * 2.4 && !occlusionLocked) {
+          gtaoPass.enabled = false;
         }
       }
     }
@@ -1293,7 +1632,14 @@ export function createWorld(
       window.removeEventListener(event, wakeUp);
     }
 
-    markers.dispose();
+    leaves.dispose();
+    fallen?.dispose();
+    fallen = null;
+    outsideAmbientOcclusion.length = 0;
+    moon?.dispose();
+    moon = null;
+    stars.dispose();
+    erdlight.dispose();
 
     tornado?.dispose();
     tornado = null;
@@ -1343,6 +1689,16 @@ export function createWorld(
     rig,
     book,
     relight,
+    occlusion: {
+      get enabled() {
+        return gtaoPass.enabled;
+      },
+      set: (enabled: boolean) => {
+        gtaoPass.enabled = enabled;
+        // Выбор посетителя старше пробы: она больше не трогает затенение.
+        occlusionLocked = true;
+      },
+    },
     get timing() {
       return timing;
     },

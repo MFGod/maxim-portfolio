@@ -82,7 +82,9 @@ describe('план мира', () => {
   });
 
   it('ломаная маршрута состоит из пар координат', () => {
-    const pairs = planPolyline(worldChapters.map((chapter) => chapter.grace)).split(' ');
+    const pairs = planPolyline(worldChapters.map((chapter) => chapter.grace)).split(
+      ' ',
+    );
     expect(pairs).toHaveLength(worldChapters.length);
     for (const pair of pairs) {
       expect(pair).toMatch(/^-?\d+\.\d{2},-?\d+\.\d{2}$/);

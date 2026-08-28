@@ -26,7 +26,10 @@ function treeMesh(height = 0.309): THREE.Mesh {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute([0, 0, 0, 0.1, height, 0.1, -0.1, height / 2, 0], 3),
+    new THREE.Float32BufferAttribute(
+      [0, 0, 0, 0.1, height, 0.1, -0.1, height / 2, 0],
+      3,
+    ),
   );
   return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
 }
@@ -42,14 +45,20 @@ function compile(material: THREE.Material) {
 
 /** Значения атрибутов по умолчанию: в типах три их объявили только у шейдерных. */
 function defaultsOf(material: THREE.Material) {
-  return (material as THREE.Material & { defaultAttributeValues?: Record<string, number[]> })
-    .defaultAttributeValues;
+  return (
+    material as THREE.Material & { defaultAttributeValues?: Record<string, number[]> }
+  ).defaultAttributeValues;
 }
 
 describe('isWindy', () => {
   it('качает деревья и не трогает кусты', () => {
     // Arrange — имена из `assets.ts`, как они приходят в загрузчик.
-    const windy = ['tree_yellow_1', 'tree_conifer_green_2', 'tree_dead', 'caelid_tree_1'];
+    const windy = [
+      'tree_yellow_1',
+      'tree_conifer_green_2',
+      'tree_dead',
+      'caelid_tree_1',
+    ];
     const still = ['bush_green_1', 'bush_orange_4', 'gelmir_rock_1', 'grace', 'map'];
 
     // Act + Assert

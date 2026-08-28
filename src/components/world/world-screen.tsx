@@ -84,7 +84,6 @@ export function WorldScreen() {
           <BookContents />
         </div>
       ) : null}
-
     </main>
   );
 }

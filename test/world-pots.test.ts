@@ -39,7 +39,9 @@ function potsMesh(count = PLACES.length): THREE.InstancedMesh {
   for (let i = 0; i < count; i++) {
     const place = PLACES[i % PLACES.length]!;
     // Наклоны разные и не вокруг Y: прыжок обязан их сохранить.
-    quaternion.setFromEuler(new THREE.Euler(0.4 + i * 0.3, 1.1 + i * 0.7, -0.6 + i * 0.2));
+    quaternion.setFromEuler(
+      new THREE.Euler(0.4 + i * 0.3, 1.1 + i * 0.7, -0.6 + i * 0.2),
+    );
     matrix.compose(new THREE.Vector3(place.x, place.y, place.z), quaternion, scale);
     mesh.setMatrixAt(i, matrix);
   }
@@ -120,7 +122,9 @@ describe('attachPots', () => {
     // Наклон свой, доворот — только вокруг Y: ось Y горшка не изменилась.
     const basis = new THREE.Matrix4().extractRotation(after);
     const up = new THREE.Vector3(0, 1, 0).applyMatrix4(basis);
-    const wasUp = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(0.4 + 3 * 0.3, 1.1 + 3 * 0.7, -0.6 + 3 * 0.2));
+    const wasUp = new THREE.Vector3(0, 1, 0).applyEuler(
+      new THREE.Euler(0.4 + 3 * 0.3, 1.1 + 3 * 0.7, -0.6 + 3 * 0.2),
+    );
     expect(up.angleTo(wasUp)).toBeGreaterThan(0);
     expect(new THREE.Vector3().setFromMatrixScale(after).x).toBeCloseTo(1, 6);
   });
@@ -132,7 +136,9 @@ describe('attachPots', () => {
 
     // Ищем момент, когда высоты хоть у кого-то разошлись.
     world.update(peakTime(0));
-    const lifted = [0, 1, 2, 3].map((i, index) => positionAt(pots, i).y - before[index]!);
+    const lifted = [0, 1, 2, 3].map(
+      (i, index) => positionAt(pots, i).y - before[index]!,
+    );
 
     expect(lifted[0]).toBeCloseTo(POT_HEIGHT * HOP_HEIGHT_FACTOR, 6);
     expect(new Set(lifted.map((value) => value.toFixed(6))).size).toBeGreaterThan(1);

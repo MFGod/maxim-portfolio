@@ -8,8 +8,11 @@ import {
 } from '@/data/world-figures';
 import { SEA_LEVEL } from '@/data/world-places';
 import {
+  BOLT_FLIGHT,
+  CAST,
   PERIOD,
   PHASES,
+  battleBolts,
   battleCycle,
   battleFighters,
   battleRadius,
@@ -376,5 +379,208 @@ describe('worldBattles', () => {
 
   it('заморожены: стычку нельзя править из сцены', () => {
     expect(Object.isFrozen(worldBattles)).toBe(true);
+  });
+});
+
+describe('снаряды магов', () => {
+  /** Середина размена: к этому мигу обе стороны уже сошлись. */
+  const clash = PHASES.rise + PHASES.approach;
+  const midMelee = clash + PHASES.melee / 2;
+
+  it('до схода и после падения маг не стреляет', () => {
+    // До схода он ещё идёт, после — либо падает, либо ликует. Снаряд из
+    // ликующего мага читался бы добиванием лежачего.
+    expect(battleBolts(battle, 1)).toHaveLength(0);
+    expect(battleBolts(battle, clash - 0.01)).toHaveLength(0);
+    expect(battleBolts(battle, clash + PHASES.melee + 0.5)).toHaveLength(0);
+  });
+
+  it('за размен маг успевает выстрелить не один раз', () => {
+    const shots = new Set<string>();
+
+    for (let step = 0; step < PHASES.melee * 20; step++) {
+      for (const bolt of battleBolts(battle, clash + step / 20)) shots.add(bolt.id);
+    }
+
+    // Два мага, у каждого шесть с лишним выстрелов за двадцать одну секунду.
+    expect(shots.size).toBeGreaterThanOrEqual(10);
+  });
+
+  it('в воздухе у мага не больше одного снаряда', () => {
+    // Полёт короче периода: иначе снаряды идут вереницей и читаются очередью.
+    expect(BOLT_FLIGHT).toBeLessThan(CAST);
+
+    for (let step = 0; step < PHASES.melee * 10; step++) {
+      const bolts = battleBolts(battle, clash + step / 10);
+      const owners = bolts.map((bolt) => bolt.id.split('-').slice(0, -2).join('-'));
+
+      expect(new Set(owners).size).toBe(owners.length);
+    }
+  });
+
+  it('снаряд летит от мага к чужой шеренге, а не наоборот', () => {
+    /*
+     * Фронт этой стычки идёт по оси Z: нежить стоит на -Z, живые на +Z.
+     * Снаряд нежити обязан двигаться в сторону +Z по ходу полёта.
+     */
+    const track: { part: number; z: number }[] = [];
+
+    for (let step = 0; step <= 10; step++) {
+      const at = clash + (BOLT_FLIGHT * step) / 10;
+      const bolt = battleBolts(battle, at).find((one) => one.side === -1);
+      if (bolt) track.push({ part: bolt.part, z: bolt.z });
+    }
+
+    expect(track.length).toBeGreaterThan(3);
+
+    for (let index = 1; index < track.length; index++) {
+      expect(track[index]!.z).toBeGreaterThan(track[index - 1]!.z);
+    }
+  });
+
+  it('снаряд идёт дугой: середина пути выше концов', () => {
+    const samples: { part: number; y: number }[] = [];
+
+    for (let step = 0; step <= 20; step++) {
+      const at = clash + (BOLT_FLIGHT * step) / 20;
+      const bolt = battleBolts(battle, at).find((one) => one.side === -1);
+      if (bolt) samples.push({ part: bolt.part, y: bolt.y });
+    }
+
+    const ends = samples.filter((one) => one.part < 0.1 || one.part > 0.9);
+    const middle = samples.filter((one) => one.part > 0.4 && one.part < 0.6);
+
+    expect(ends.length).toBeGreaterThan(0);
+    expect(middle.length).toBeGreaterThan(0);
+
+    const highestEnd = Math.max(...ends.map((one) => one.y));
+    const lowestMiddle = Math.min(...middle.map((one) => one.y));
+
+    expect(lowestMiddle).toBeGreaterThan(highestEnd);
+  });
+
+  it('снаряд летит на высоте бойца, а не по земле', () => {
+    /*
+     * Снаряд живёт полсекунды из трёх с лишним, поэтому высоты собираются по
+     * всей фазе размена: взятый наугад миг чаще всего застаёт пустое небо.
+     */
+    let seen = 0;
+
+    for (let step = 0; step < PHASES.melee * 20; step++) {
+      for (const bolt of battleBolts(battle, clash + step / 20)) {
+        const above = bolt.y - battle.at[1];
+
+        // Между поясом и макушкой: снаряд у щиколоток читается искрой на траве.
+        expect(above).toBeGreaterThan(0.117 * 0.4);
+        expect(above).toBeLessThan(0.117 * 1.1);
+        seen++;
+      }
+    }
+
+    expect(seen).toBeGreaterThan(50);
+  });
+
+  it('тот же миг даёт те же снаряды', () => {
+    // Бой вычисляется из времени, а не копится состоянием: пауза и сон
+    // ноутбука не должны рвать полёт.
+    expect(battleBolts(battle, midMelee)).toEqual(battleBolts(battle, midMelee));
+  });
+
+  it('стороны стреляют вразнобой', () => {
+    /*
+     * Сдвиг на полпериода: без него оба снаряда всегда встречаются ровно
+     * посередине, и размен читается пинг-понгом.
+     */
+    let together = 0;
+    let apart = 0;
+
+    for (let step = 0; step < PHASES.melee * 10; step++) {
+      const bolts = battleBolts(battle, clash + step / 10);
+      const sides = new Set(bolts.map((bolt) => bolt.side));
+
+      if (sides.size === 2) together++;
+      else if (sides.size === 1) apart++;
+    }
+
+    expect(apart).toBeGreaterThan(0);
+    expect(together).toBe(0);
+  });
+});
+
+describe('падение приходит от противника', () => {
+  const clash = PHASES.rise + PHASES.approach;
+  const melee = clash + PHASES.melee;
+
+  /** Круг, в котором падает нежить: у этой стычки сдвиг фазы нулевой. */
+  const cycleWhereUndeadFalls = losingSide(0) === -1 ? 0 : 1;
+  const base = cycleWhereUndeadFalls * PERIOD;
+
+  /** Когда боец переходит в клип падения: первый миг позы `Death_A_Pose`. */
+  const fallsAt = (fighter: (typeof fighters)[number]): number => {
+    for (let step = 0; step <= PHASES.fall * 40; step++) {
+      const at = melee + step / 40;
+      if (battleStep(battle, fighter, base + at).pose.clip === 'Death_A_Pose') {
+        return at - melee;
+      }
+    }
+
+    return Number.NaN;
+  };
+
+  it('маг падает последним: до него мечники не достают', () => {
+    const mageDown = fallsAt(undeadMage);
+    const warriorDown = fallsAt(undeadWarrior);
+
+    expect(Number.isFinite(mageDown)).toBe(true);
+    expect(mageDown).toBeGreaterThan(warriorDown);
+  });
+
+  it('мага роняет снаряд: прилёт совпадает с падением', () => {
+    /*
+     * Маг стоит вторым рядом, и мечом его не достать. Единственная причина
+     * его падения — добивающий снаряд вражеского мага, и он обязан прилететь
+     * ровно тогда, когда маг валится, а не «где-то в той же фазе».
+     */
+    const down = fallsAt(undeadMage);
+    const shots: { part: number; at: number }[] = [];
+
+    for (let step = 0; step <= PHASES.fall * 40; step++) {
+      const at = melee + step / 40;
+      for (const bolt of battleBolts(battle, base + at)) {
+        if (bolt.side === 1) shots.push({ part: bolt.part, at: at - melee });
+      }
+    }
+
+    expect(shots.length).toBeGreaterThan(0);
+
+    const landing = Math.max(...shots.map((shot) => shot.at));
+    expect(landing).toBeGreaterThan(down - 0.1);
+    expect(landing).toBeLessThanOrEqual(down + 0.05);
+  });
+
+  it('победитель не ликует, пока его противник на ногах', () => {
+    const down = fallsAt(undeadWarrior);
+
+    // За полсекунды до падения врага рыцарь ещё в бою, а не в победной позе.
+    const before = battleStep(battle, knight, base + melee + down - 0.5).pose.clip;
+    const after = battleStep(battle, knight, base + melee + down + 0.5).pose.clip;
+
+    expect(['Interact', 'Blocking']).toContain(before);
+    expect(after).toBe('Cheer');
+  });
+
+  it('добивающий выпад приходится на миг падения врага', () => {
+    /*
+     * Выпад — единственное движение удара, какое есть в моделях: клипа взмаха
+     * в них не оставили. Значит момент попадания читается только глубиной
+     * выпада, и она обязана быть наибольшей там, где враг падает.
+     */
+    const down = fallsAt(undeadWarrior);
+    const depthAt = (offset: number): number => {
+      const step = battleStep(battle, knight, base + melee + down + offset);
+      return Math.abs(step.z - battle.at[2]);
+    };
+
+    expect(depthAt(-0.02)).toBeGreaterThan(depthAt(-0.55));
   });
 });

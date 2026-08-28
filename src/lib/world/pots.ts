@@ -90,7 +90,10 @@ export function hopState(index: number, time: number, height: number) {
  *
  * @returns `null`, если горшков в сцене нет — мир от этого не ломается
  */
-export function attachPots(scene: THREE.Object3D, options: PotsOptions = {}): Pots | null {
+export function attachPots(
+  scene: THREE.Object3D,
+  options: PotsOptions = {},
+): Pots | null {
   const { reducedMotion } = options;
 
   const pots = scene.getObjectByName(MESH_NAME) as THREE.InstancedMesh | undefined;

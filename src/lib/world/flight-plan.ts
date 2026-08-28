@@ -224,7 +224,11 @@ export function planFlight(
     const t = (index + 1) * reach;
     const flat = lerpPoint(from.at, to.at, t);
 
-    return [flat[0], flat[1] + lift * (1 + bulge(lifts, index)) * edgeWindow(t, edge), flat[2]];
+    return [
+      flat[0],
+      flat[1] + lift * (1 + bulge(lifts, index)) * edgeWindow(t, edge),
+      flat[2],
+    ];
   });
 
   /*
