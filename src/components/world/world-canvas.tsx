@@ -7,16 +7,13 @@ import type { FigureClip, WorldFigure } from '@/data/world-figures';
 import { useTranslate } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 import { useResolvedTheme, useSetting } from '@/lib/settings/hooks';
-import { figureToolsEnabled, shotToolsEnabled } from '@/lib/world/dev-tools';
+import { figureTools, shotTools } from '@/lib/world/dev-tools';
 import { stations } from '@/lib/world/shots';
 import type { BookProbe, BookProbePart } from '@/lib/world/book/debug';
-import type { TabPose } from '@/lib/world/book/tab';
 import type { ControlMode, World } from '@/lib/world/scene';
 
 import { FigureTuner } from './figure-tuner';
-import { TabTuner } from './tab-tuner';
 import { WorldFps } from './world-fps';
-import { WorldSkills } from './world-skills';
 import { WorldMenu } from './world-menu';
 
 /**
@@ -53,7 +50,6 @@ const PROBE_PARTS: Record<BookProbePart['name'], { label: string; color: string 
   right: { label: 'правая', color: '#4dff88' },
   left: { label: 'левая', color: '#4db8ff' },
   seam: { label: 'шов', color: '#ffd24d' },
-  tab: { label: 'закладка', color: '#ff9f4d' },
 };
 
 export function WorldCanvas({
@@ -74,7 +70,6 @@ export function WorldCanvas({
   /** На какой станции стоим. Первая — благодать под Древом, начало пути. */
   const [station, setStation] = useState(0);
   /** Пройденная глава по счёту мира: её же копит панель навыков. */
-  const [passed, setPassed] = useState<string | null>(null);
   /**
    * Мир в облёте — хранитель экрана.
    *
@@ -83,6 +78,13 @@ export function WorldCanvas({
    * следит сцена, она же и сообщает сюда.
    */
   const [resting, setResting] = useState(false);
+  /**
+   * Экранное затенение: мягкая тень в углах.
+   *
+   * Состояние держится здесь, а не читается у мира каждый кадр: меняют его
+   * раз в сеанс, а перерисовывать меню шестьдесят раз в секунду незачем.
+   */
+  const [occlusion, setOcclusion] = useState(true);
   /** Подсказка про осмотр: гаснет, как только мышь тронула сцену. */
   const [hinted, setHinted] = useState(false);
   /** Раскрыта ли книга-резюме. Само состояние живёт в сцене, здесь — отражение. */
@@ -92,7 +94,6 @@ export function WorldCanvas({
   /** Сколько ракурсов снято. Только для панели подбора, в прод не попадает. */
   const [shots, setShots] = useState(0);
   /** Подобранное положение закладки. Только в разработке. */
-  const [tabPose, setTabPose] = useState<TabPose | null>(null);
   const [copied, setCopied] = useState(false);
   /** Расстановка фигур. Только в разработке, за флагом `FIGURE_TOOLS`. */
   const [figures, setFigures] = useState<WorldFigure[]>([]);
@@ -176,10 +177,11 @@ export function WorldCanvas({
          * посетитель стоит у Flexy.
          */
         onRest: setResting,
+        // Щелчок по тому идёт мимо оболочки — луч ловит сама книга. Без этого
+        // дорожка глав оставалась бы на кадре под раскрытым разворотом.
+        onBook: setBookOpen,
         onChapter: (positionId) => {
           if (!positionId) return;
-
-          setPassed(positionId);
 
           const index = stations().findIndex((stop) => stop.positionId === positionId);
           if (index >= 0) setStation(index);
@@ -285,6 +287,15 @@ export function WorldCanvas({
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  /** Переключает затенение. Выбор посетителя старше пробы качества. */
+  const switchOcclusion = (enabled: boolean) => {
+    const world = worldRef.current;
+    if (!world) return;
+
+    world.occlusion.set(enabled);
+    setOcclusion(world.occlusion.enabled);
+  };
+
   const toggleBook = () => {
     const world = worldRef.current;
     if (!world) return;
@@ -293,21 +304,13 @@ export function WorldCanvas({
     setBookOpen(world.book.opened);
   };
 
-  /** Раскрывает книгу сразу на подсказках — то же, что и её закладка. */
+  /** Раскрывает книгу сразу на подсказках. */
   const openGuide = () => {
     const world = worldRef.current;
     if (!world) return;
 
     world.book.guide();
     setBookOpen(world.book.opened);
-  };
-
-  /** Шаг подбора закладки. Значение показывается панелью рядом с ней. */
-  const nudgeTab = (delta: Partial<TabPose>) => {
-    const tuning = worldRef.current?.book.debug?.tab;
-    if (!tuning) return;
-
-    setTabPose(tuning.nudge(delta));
   };
 
   /**
@@ -345,7 +348,7 @@ export function WorldCanvas({
    * Панель подбора ракурсов. Выключена флагом `SHOT_TOOLS` — точки уже перенесены
    * в `world-shots.ts`, а инструмент остаётся рабочим на случай новых.
    */
-  const tuning = shotToolsEnabled();
+  const tuning = shotTools;
 
   const takeShot = () => {
     const world = worldRef.current;
@@ -382,7 +385,7 @@ export function WorldCanvas({
    * Инструмент расстановки фигур. Включается флагом `FIGURE_TOOLS`: пока
    * `world-figures.ts` пуст, он и есть единственный способ населить мир.
    */
-  const figureTuning = figureToolsEnabled();
+  const figureTuning = figureTools;
 
   /** Доля канваса под курсором: сцена сама переведёт её в луч. */
   const canvasFraction = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -679,9 +682,13 @@ export function WorldCanvas({
         </div>
       ) : null}
 
-      {chrome && ready && !resting ? <WorldSkills passed={passed} /> : null}
-
-      {chrome && ready && !resting ? (
+      {/*
+        Дорожка глав уходит с кадра, пока книга раскрыта: разворот встаёт
+        посреди экрана и накрывает её собой, а полупрозрачная плашка поверх
+        страницы читается грязью на бумаге. Меню в правом верхнем углу
+        остаётся — им книгу и закрывают.
+      */}
+      {chrome && ready && !resting && !bookOpen ? (
         <nav
           aria-label={t('world.steps.label')}
           className="border-book-rule bg-glass-book absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-sm border p-1 shadow-sm backdrop-blur-sm"
@@ -728,7 +735,7 @@ export function WorldCanvas({
         </nav>
       ) : null}
 
-      {chrome && ready && !resting && !hinted && !flying ? (
+      {chrome && ready && !resting && !hinted && !flying && !bookOpen ? (
         <p className="text-2xs text-book-paper pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 font-mono drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
           {t('world.steps.hint')}
         </p>
@@ -736,58 +743,39 @@ export function WorldCanvas({
 
       {probe && chrome && ready ? (
         <div aria-hidden className="pointer-events-none absolute inset-0">
-          {/*
-            Закладка в замерах есть, а рамки у неё нет: её проекция нужна
-            панели подбора, чтобы висеть рядом, — но сама закладка мелкая, и
-            рамка с подписью закрывала бы ровно то, что подбирают.
-          */}
-          {probe.parts
-            .filter((part) => part.name !== 'tab')
-            .map((part) => (
-              <div
-                key={part.name}
-                className="absolute border"
-                style={{
-                  left: `${part.left * 100}%`,
-                  top: `${part.top * 100}%`,
-                  width: `${(part.right - part.left) * 100}%`,
-                  height: `${(part.bottom - part.top) * 100}%`,
-                  borderColor: PROBE_PARTS[part.name].color,
-                }}
+          {probe.parts.map((part) => (
+            <div
+              key={part.name}
+              className="absolute border"
+              style={{
+                left: `${part.left * 100}%`,
+                top: `${part.top * 100}%`,
+                width: `${(part.right - part.left) * 100}%`,
+                height: `${(part.bottom - part.top) * 100}%`,
+                borderColor: PROBE_PARTS[part.name].color,
+              }}
+            >
+              <span
+                className="text-2xs absolute top-0 left-0 px-1 font-mono"
+                style={{ color: PROBE_PARTS[part.name].color }}
               >
-                <span
-                  className="text-2xs absolute top-0 left-0 px-1 font-mono"
-                  style={{ color: PROBE_PARTS[part.name].color }}
-                >
-                  {PROBE_PARTS[part.name].label} {(part.left * 100).toFixed(1)}–
-                  {(part.right * 100).toFixed(1)}
-                </span>
-              </div>
-            ))}
+                {PROBE_PARTS[part.name].label} {(part.left * 100).toFixed(1)}–
+                {(part.right * 100).toFixed(1)}
+              </span>
+            </div>
+          ))}
 
           <p className="text-2xs absolute top-11 left-3 rounded-sm bg-black/70 px-2 py-1 font-mono text-white">
             доля {probe.progress === null ? '—' : probe.progress.toFixed(2)} · [ ] шаг ·
             \\ отпустить
           </p>
-
-          {/*
-            Подбор закладки — рядом с ней самой, а не в углу кадра: смотреть на
-            язычок и тянуться глазами в другой конец экрана значит подбирать
-            вслепую. Панель висит на проекции закладки и едет вместе с книгой.
-          */}
-          <TabTuner
-            probe={probe}
-            pose={tabPose}
-            onNudge={nudgeTab}
-            onRead={() => setTabPose(worldRef.current?.book.debug?.tab.pose() ?? null)}
-          />
         </div>
       ) : null}
 
       {/*
         Камера, книга и выход собраны в одно меню: три отдельные плашки по
-        углам кадра спорили и между собой, и с книгой, которая теперь лежит в
-        левом нижнем углу — ровно там, где стояла кнопка «Открыть резюме».
+        углам кадра спорили и между собой, и с книгой, которая лежит в правом
+        нижнем углу — ровно там, где стояла кнопка «Открыть резюме».
       */}
       {/* Счётчик кадров — только в разработке: в мире он часть отладки, а не кадра. */}
       {process.env.NODE_ENV === 'development' && chrome && ready ? <WorldFps /> : null}
@@ -799,6 +787,8 @@ export function WorldCanvas({
           bookOpen={bookOpen}
           onToggleBook={toggleBook}
           onGuide={openGuide}
+          occlusion={occlusion}
+          onOcclusion={switchOcclusion}
           homeHref={homeHref}
         />
       ) : null}

@@ -52,13 +52,16 @@ import {
   PAPER_LIFT,
   READING,
   SHEET_CLEARANCE,
+  READING_SCALE,
   STOWED,
+  STOWED_GAP,
+  STOWED_SCALE,
+  STOWED_SIDE,
 } from './metrics';
-import { frameHalf, keptInFrame, worldPerPixel } from './placement';
+import { frameHalf, keptInFrame, stowedCorner, worldPerPixel } from './placement';
 import { createBookPointer } from './pointer';
 import { createSheet } from './sheet';
 import { spinStep, unwound } from './spin';
-import { createTab } from './tab';
 
 export type BookOptions = {
   renderer: THREE.WebGLRenderer;
@@ -77,6 +80,15 @@ export type BookOptions = {
    * портфолио.
    */
   locale?: () => Locale;
+  /**
+   * Книгу раскрыли или закрыли.
+   *
+   * Оболочке мира это знать обязательно: раскрытый том занимает середину кадра,
+   * и дорожка глав под ним уходит с экрана. Своим колбэком, а не опросом
+   * `opened` из React: щелчок по книге идёт мимо оболочки — луч указателя ловит
+   * сама книга, — и без сообщения оболочка о нём не узнаёт.
+   */
+  onOpened?: (opened: boolean) => void;
 };
 
 export type Book = {
@@ -127,11 +139,40 @@ export type Book = {
   dispose: () => void;
 };
 
+/**
+ * Середина закрытого тома по ширине, в его собственных осях.
+ *
+ * Считается по мировым габаритам мешей, переведённым обратно в оси книги, а не
+ * по локальным габаритам геометрий: у обеих крышек она одна на двоих, и левая
+ * стоит на своём шарнире. В локальных осях том выходит симметричным, и середина
+ * получалась бы ровно у корешка — то есть неверной.
+ *
+ * Обходит только видимые меши: листающийся лист в покое спрятан и в габарит
+ * закрытой книги не входит.
+ */
+function closedMiddle(book: THREE.Object3D): number {
+  const box = new THREE.Box3();
+  const part = new THREE.Box3();
+  const toLocal = new THREE.Matrix4().copy(book.matrixWorld).invert();
+
+  book.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (!mesh.geometry || !mesh.visible) return;
+
+    part.setFromObject(mesh);
+    part.applyMatrix4(toLocal);
+    box.union(part);
+  });
+
+  return box.isEmpty() ? 0 : (box.min.x + box.max.x) / 2;
+}
+
 export function createBook({
   renderer,
   canvas,
   reducedMotion,
   locale,
+  onOpened,
 }: BookOptions): Book {
   const layout = spreads();
   const pool: PagePool = createPagePool(renderer);
@@ -145,10 +186,6 @@ export function createBook({
   const body = createBody(object);
   const { left, right, seam } = body;
 
-  // Закладка стоит над правой страницей. Мишень отнимает часть щелчка,
-  // листающего вперёд, — но правая половина у раскрытой книги на виду, а
-  // левая уходит от зрителя, и закладка на ней читалась хуже.
-  const tab = createTab(right.pivot, 1);
   const guide = guideSpread(layout);
 
   // --- Листающийся лист ----------------------------------------------------
@@ -400,6 +437,7 @@ export function createBook({
   const open = (): Promise<void> => {
     if (opened) return Promise.resolve();
     opened = true;
+    onOpened?.(true);
     prepare();
 
     // Пауза на обложке: книга уже приехала, крышки ещё сомкнуты.
@@ -423,6 +461,7 @@ export function createBook({
   const close = () => {
     if (!opened) return;
     opened = false;
+    onOpened?.(false);
 
     // Обратный ход без паузы: обложку уже показали, и задерживать возврат
     // значит держать зрителя.
@@ -536,11 +575,40 @@ export function createBook({
   // --- Кадр ----------------------------------------------------------------
 
   const pose = new THREE.Matrix4();
-  const from = new THREE.Quaternion().setFromEuler(STOWED.rotation);
   const to = new THREE.Quaternion().setFromEuler(READING.rotation);
   const position = new THREE.Vector3();
   const rotation = new THREE.Quaternion();
-  const one = new THREE.Vector3(1, 1, 1);
+  const size = new THREE.Vector3();
+
+  /** Куда смотрит обложка закрытого тома в его собственных осях. */
+  const FACE = new THREE.Vector3(0, 0, 1);
+
+  /**
+   * Середина закрытого тома в его собственных осях.
+   *
+   * Начало координат книги стоит у корешка, а том лежит по одну сторону от
+   * него. Без этой поправки местом в кадре распоряжался бы корешок, и книга,
+   * поставленная «над кнопкой», вставала бы мимо неё — тем сильнее, чем уже
+   * окно.
+   *
+   * Считается по геометрии, а не числом из `metrics`: у переплёта своя толщина,
+   * у крышек свой вынос, и держать это выражение вторым списком значило бы
+   * однажды поменять переплёт, забыв про место в кадре.
+   *
+   * И считается лениво, в первом же кадре: до того как поза уложит крышки на
+   * шарниры, том «плоский» и симметричный, и середина у него выходит ровно у
+   * корешка.
+   */
+  let middle: number | null = null;
+
+  /** Сдвиг начала координат к середине тома — гаснет по мере переноса. */
+  const offset = new THREE.Matrix4();
+
+  /** Поворот убранного тома: пересчитывается, пока книга ходит по кадру. */
+  const stowed = new THREE.Quaternion();
+
+  /** Направление от книги к глазу, в осях камеры. */
+  const eyeward = new THREE.Vector3();
 
   /**
    * Поворот, накрученный посетителем поверх позы.
@@ -561,6 +629,15 @@ export function createBook({
    * смещение сходит на нет вместе с ним, иначе разворот читался бы из угла.
    */
   const placed = new THREE.Vector3().copy(STOWED.position);
+
+  /**
+   * Переставлял ли книгу посетитель.
+   *
+   * До первой протяжки том сам держится в углу под кнопкой «Меню», пересчитывая
+   * место на каждое изменение пропорций окна. После — место принадлежит
+   * посетителю, и угол ему больше не навязывается.
+   */
+  let moved = false;
 
   /** Камера последнего кадра: по ней стреляют лучом указателя и леса. */
   let aim: THREE.Camera | null = null;
@@ -584,7 +661,27 @@ export function createBook({
      * ловит луч наравне со всеми, но показать себя уже не может.
      */
     position.lerpVectors(placed, READING.position, travel.carried);
-    rotation.slerpQuaternions(from, to, travel.carried);
+
+    /*
+     * Убранный том развёрнут лицом к глазу, а не параллельно кадру.
+     *
+     * В углу это не одно и то же: книга стоит в стороне от оси взгляда, у неё
+     * есть толщина, и обложка, параллельная плоскости кадра, показывала там
+     * боковую грань — том читался приоткрытой дверцей. Поворот считается
+     * каждый кадр, потому что место в углу зависит от пропорций окна и от того,
+     * куда книгу переставили.
+     */
+    eyeward.copy(placed).negate().normalize();
+    stowed.setFromUnitVectors(FACE, eyeward);
+
+    rotation.slerpQuaternions(stowed, to, travel.carried);
+
+    /*
+     * Размер идёт вместе с переносом: в углу том мельче натуральной величины,
+     * а раскрытым — крупнее. Одна и та же книга: масштаб меняет матрица позы,
+     * а не геометрия, поэтому ни толщина стопки, ни поля страницы не плывут.
+     */
+    size.setScalar(STOWED_SCALE + (READING_SCALE - STOWED_SCALE) * travel.carried);
 
     // Пока книга едет раскрываться, накрученный поворот сходит на нет.
     if (straighten) spin.copy(unwound(unwindFrom, straighten.share));
@@ -592,7 +689,15 @@ export function createBook({
     // Кручение поверх позы, а не вместо неё: поза ставит книгу в кадр, поворот
     // вертит её в руках.
     rotation.premultiply(spin);
-    pose.compose(position, rotation, one);
+    pose.compose(position, rotation, size);
+
+    /*
+     * Место в кадре держит середина тома, а не корешок. Поправка гаснет вместе
+     * с переносом: в позе чтения начало координат стоит в середине разворота, и
+     * сдвигать там нечего.
+     */
+    offset.makeTranslation(-(middle ?? 0) * (1 - travel.carried), 0, 0);
+    pose.multiply(offset);
 
     object.matrix.multiplyMatrices(camera.matrixWorld, pose);
 
@@ -610,6 +715,10 @@ export function createBook({
     sheet.setVisible(frozen !== null || turning);
 
     object.updateMatrixWorld(true);
+
+    // Габарит закрытого тома известен только теперь: крышки лежат на шарнирах,
+    // а матрицы пересчитаны. Дальше он не меняется — книга одна и та же.
+    if (middle === null && !opened) middle = closedMiddle(object);
 
     // Сферы отсечения устаревают, пока лист гнётся: без пересчёта луч
     // перестаёт попадать в него ровно в середине переворота.
@@ -640,11 +749,20 @@ export function createBook({
     const perspective = lens(camera);
     if (!perspective) return;
 
-    const inside = keptInFrame(
-      placed,
-      frameHalf(-placed.z, perspective.fov, perspective.aspect),
-      CLOSED_RADIUS,
-    );
+    const depth = -placed.z;
+    const frame = frameHalf(depth, perspective.fov, perspective.aspect);
+
+    if (!moved) {
+      // Отступ снизу задан в пикселях вёрстки — переводим его в юниты по цене
+      // пикселя на глубине книги.
+      const pixel = worldPerPixel(depth, perspective.fov, canvas.clientHeight);
+      const corner = stowedCorner(frame, pixel * STOWED_SIDE, pixel * STOWED_GAP);
+
+      placed.set(corner.x, corner.y, placed.z);
+      return;
+    }
+
+    const inside = keptInFrame(placed, frame, CLOSED_RADIUS);
 
     placed.set(inside.x, inside.y, placed.z);
   };
@@ -664,6 +782,9 @@ export function createBook({
     const depth = -placed.z;
     const step = worldPerPixel(depth, camera.fov, height);
 
+    // С первой протяжки место книги держит посетитель, а не угол кадра.
+    moved = true;
+
     // Экран считает вниз, мир — вверх, отсюда знак у вертикали.
     const wanted = { x: placed.x + dx * step, y: placed.y - dy * step };
     const inside = keptInFrame(
@@ -678,7 +799,7 @@ export function createBook({
   const pointer = createBookPointer({
     canvas,
     camera: () => aim,
-    targets: [...body.targets, tab.mesh],
+    targets: body.targets,
     // Пока идёт переворот, книга кликов не принимает: второй лист поднимать
     // некуда, а перебитый переворот заканчивается подменой текстур на виду.
     ready: () => !turning && !riffling,
@@ -692,8 +813,7 @@ export function createBook({
       else spin.premultiply(spinStep(dx, dy));
     },
     pick: (part, uv) => {
-      const target: PickTarget =
-        part === tab.mesh ? 'tab' : body.isLeft(part) ? 'left' : 'right';
+      const target: PickTarget = body.isLeft(part) ? 'left' : 'right';
 
       /*
        * Ссылку ищем только на бумаге и только по попаданию с развёрткой: у
@@ -701,7 +821,7 @@ export function createBook({
        * на случайную строку.
        */
       const hotspot =
-        uv && body.isPage(part) && target !== 'tab'
+        uv && body.isPage(part)
           ? hotspotAt(hotspots[target], { u: uv.x, v: uv.y }, PAGE_SIZE)
           : null;
 
@@ -719,9 +839,6 @@ export function createBook({
           return;
         case 'back':
           turn(-1);
-          return;
-        case 'guide':
-          void riffleTo(guide);
           return;
         case 'link':
           if (hotspot) openLink(hotspot.href);
@@ -765,9 +882,7 @@ export function createBook({
             { name: 'right', mesh: right.page },
             { name: 'seam', mesh: seam },
             { name: 'sheet', mesh: sheet.front },
-            { name: 'tab', mesh: tab.mesh },
           ],
-          tab: { pose: tab.pose, nudge: tab.nudge },
           links: () => hotspots,
         })
       : undefined;
@@ -813,7 +928,6 @@ export function createBook({
        */
       pool.dispose();
       body.dispose();
-      tab.dispose();
       sheet.dispose();
       frontMaterial.dispose();
       backMaterial.dispose();

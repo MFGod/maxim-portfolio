@@ -6,7 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { experience, projects } from '@/data/resume';
 import { worldChapters } from '@/data/world-places';
 import { requireAttribute } from '@/lib/world/book/attributes';
-import { mapFaceToPanel, rimShade, turnFaceUV, wingAngles } from '@/lib/world/book/body';
+import {
+  mapFaceToPanel,
+  rimShade,
+  turnFaceUV,
+  wingAngles,
+} from '@/lib/world/book/body';
 import {
   CLOSED_RADIUS,
   CLOSED_THICKNESS,
@@ -31,13 +36,18 @@ import {
   PAPER_LIFT,
   READING,
   READING_MARGIN,
+  READING_SCALE,
   RIFFLE_MIN,
   SHEET_CLEARANCE,
   STOWED,
-  TAB_COLOR,
-  TAB_INK,
+  STOWED_SCALE,
 } from '@/lib/world/book/metrics';
-import { frameHalf, keptInFrame, worldPerPixel } from '@/lib/world/book/placement';
+import {
+  frameHalf,
+  keptInFrame,
+  stowedCorner,
+  worldPerPixel,
+} from '@/lib/world/book/placement';
 import { guideSpread, sheetCount, spreads } from '@/lib/world/book/plan';
 import { rifflePlan } from '@/lib/world/book/riffle';
 import { pageProfile } from '@/lib/world/book/profile';
@@ -934,11 +944,6 @@ describe('щелчок по книге', () => {
     expect(pickAction(open(0), 'right')).toBe('forward');
   });
 
-  it('закладка ведёт на подсказки в любом состоянии', () => {
-    expect(pickAction(closed, 'tab')).toBe('guide');
-    expect(pickAction(open(7), 'tab')).toBe('guide');
-  });
-
   it('ссылка старше листания и закрытия', () => {
     // Строка ссылки занимает одну строку из всей полосы: промахнуться мимо
     // неё легко, попасть случайно — нет. Поэтому она забирает щелчок.
@@ -949,10 +954,6 @@ describe('щелчок по книге', () => {
 
   it('у закрытой книги ссылок нет: на виду обложка', () => {
     expect(pickAction({ opened: false, spread: 0, link: true }, 'left')).toBe('open');
-  });
-
-  it('закладка старше ссылки: она лежит поверх страницы', () => {
-    expect(pickAction({ opened: true, spread: 3, link: true }, 'tab')).toBe('guide');
   });
 });
 
@@ -991,9 +992,14 @@ describe('позы книги в кадре', () => {
     const points: THREE.Vector3[] = [];
 
     for (const sign of [1, -1] as const) {
-      const spin = new THREE.Matrix4().makeRotationY(sign === 1 ? angles.right : angles.left);
+      const spin = new THREE.Matrix4().makeRotationY(
+        sign === 1 ? angles.right : angles.left,
+      );
 
-      for (const x of [(sign * PAGE_W) / 2 - COVER_W / 2, (sign * PAGE_W) / 2 + COVER_W / 2])
+      for (const x of [
+        (sign * PAGE_W) / 2 - COVER_W / 2,
+        (sign * PAGE_W) / 2 + COVER_W / 2,
+      ])
         for (const y of [-COVER_H / 2, COVER_H / 2])
           for (const z of [-BLOCK_T - BOARD_T, 0])
             points.push(new THREE.Vector3(x, y, z).applyMatrix4(spin));
@@ -1031,21 +1037,67 @@ describe('позы книги в кадре', () => {
     }
   });
 
-  it('убранная книга лежит в левой половине кадра', () => {
-    expect(STOWED.position.x).toBeLessThan(0);
+  it('убранная книга лежит в правом нижнем углу кадра', () => {
+    // Сверху висит кнопка «Меню», внизу по центру — дорожка глав, слева
+    // внизу — компас.
+    expect(STOWED.position.x).toBeGreaterThan(0);
     expect(STOWED.position.y).toBeLessThan(0);
   });
 
-  it('поворот убранной позы зеркален повороту в правом углу', () => {
+  it('убранный том мельче натуральной величины, раскрытый — крупнее', () => {
     /*
-     * Прежде книга лежала справа с поворотом (-0.5, -0.7, 0.26). Отражение по
-     * горизонтали меняет знак у поворотов вокруг вертикали и вокруг взгляда и
-     * оставляет наклон к зрителю: иначе том у левого края лежит корешком от
-     * посетителя.
+     * В углу книга — метка, и в натуральную величину она отъедала у мира
+     * заметный кусок кадра. Раскрытый разворот, наоборот, читают: лишняя пятая
+     * часть кегля решает, читается он с одного взгляда или с прищуром.
      */
-    expect(STOWED.rotation.x).toBeCloseTo(-0.5, 6);
-    expect(STOWED.rotation.y).toBeCloseTo(0.7, 6);
-    expect(STOWED.rotation.z).toBeCloseTo(-0.26, 6);
+    expect(STOWED_SCALE).toBeLessThan(1);
+    expect(READING_SCALE).toBeGreaterThan(1);
+  });
+
+  it('по убранному тому по-прежнему можно попасть указателем', () => {
+    // Щелчок по книге — единственный способ её открыть: ужимать метку до
+    // неприцельной некуда.
+    expect(STOWED_SCALE).toBeGreaterThan(2 / 3);
+  });
+
+  /** Убранная поза: 0.9 юнита от глаза, угол обзора мира — 65°. */
+  const STOWED_DEPTH = 0.9;
+  const WORLD_FOV = 65;
+  /** Отступы до корешка от правой и нижней кромок — в юнитах на этой глубине. */
+  const SIDE = 0.23;
+  const GAP = 0.21;
+
+  it('угол считается по кадру: книга уходит вправо вниз, но остаётся видимой', () => {
+    /*
+     * Место в углу не задано числом в юнитах — половина видимой ширины идёт за
+     * пропорциями окна, и на широком мониторе книга, поставленная числом,
+     * висела бы посреди пустоты.
+     */
+    const frame = frameHalf(STOWED_DEPTH, WORLD_FOV, 16 / 9);
+    const corner = stowedCorner(frame, SIDE, GAP);
+
+    expect(corner.x).toBeCloseTo(frame.width - SIDE, 6);
+    expect(corner.y).toBeCloseTo(-(frame.height - GAP), 6);
+  });
+
+  it('над нижним рядом оболочки, а не за нижней кромкой', () => {
+    // Отступ снизу — это ряд кнопок: без него книга подлезала бы под него.
+    const frame = frameHalf(STOWED_DEPTH, WORLD_FOV, 16 / 9);
+
+    expect(stowedCorner(frame, SIDE, GAP).y).toBeGreaterThan(
+      stowedCorner(frame, SIDE, 0).y,
+    );
+  });
+
+  it('в тесном кадре книга не уезжает за противоположную кромку', () => {
+    // Узкое окно: отступов больше, чем самого кадра, — угол схлопывается в
+    // середину, а не выбрасывает книгу за левый край.
+    const tight = { width: 0.05, height: 0.05 };
+
+    const corner = stowedCorner(tight, SIDE, GAP);
+
+    expect(corner.x).toBeCloseTo(0, 10);
+    expect(corner.y).toBeCloseTo(0, 10);
   });
 });
 
@@ -1071,15 +1123,9 @@ describe('палитра книги и токены оболочки', () => {
     expect(tokenValue('book-accent')).toBe(PAGE_PALETTE.accent);
     expect(tokenValue('book-rule')).toBe(PAGE_PALETTE.rule);
   });
-
-  it('закладка красится той же охрой, что и акцент страницы', () => {
-    // Иначе язычок на обрезе читается наклейкой из другого набора.
-    expect(TAB_COLOR).toBe(PAGE_PALETTE.accent);
-    expect(TAB_INK).toBe(PAGE_PALETTE.paper);
-  });
 });
 
-describe('пролистывание до закладки', () => {
+describe('пролистывание до разворота подсказок', () => {
   it('соседний разворот листается обычным переворотом', () => {
     // Ускорять этот случай значило бы завести два разных листания на одно
     // движение: до соседа листают и без закладки.

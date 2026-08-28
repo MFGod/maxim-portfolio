@@ -54,7 +54,9 @@ describe('попадание в ссылку страницы', () => {
      */
     const low = spot({ y: 1300 });
 
-    expect(hotspotAt([low], { u: 0.2, v: 1 - 1320 / SIZE.height }, SIZE)).not.toBeNull();
+    expect(
+      hotspotAt([low], { u: 0.2, v: 1 - 1320 / SIZE.height }, SIZE),
+    ).not.toBeNull();
     expect(hotspotAt([low], { u: 0.2, v: 1320 / SIZE.height }, SIZE)).toBeNull();
   });
 

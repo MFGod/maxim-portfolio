@@ -13,11 +13,10 @@
 import * as THREE from 'three';
 
 import type { PageHotspot, PageSide } from './draw';
-import type { TabPose } from './tab';
 
 /** Часть книги на экране: доли от 0 до 1 от левого верхнего угла кадра. */
 export type BookProbePart = {
-  name: 'sheet' | 'left' | 'right' | 'seam' | 'tab';
+  name: 'sheet' | 'left' | 'right' | 'seam';
   left: number;
   right: number;
   top: number;
@@ -44,20 +43,7 @@ export type BookDebug = {
   links: () => Record<PageSide, readonly PageHotspot[]>;
   /** Проекции частей книги на экран. `null`, пока камера не известна. */
   probe: () => BookProbe | null;
-  /**
-   * Подбор положения закладки.
-   *
-   * Здесь, а не в контракте книги: подобранное отсюда всё равно переезжает в
-   * `TAB` руками, и в боевой сборке ручке делать нечего.
-   */
-  tab: TabTuning;
   dispose: () => void;
-};
-
-/** Ручка подбора: шаг в любую сторону и чтение текущего положения. */
-export type TabTuning = {
-  pose: () => TabPose;
-  nudge: (delta: Partial<TabPose>) => TabPose;
 };
 
 /** Что книга даёт инструментам: только чтение и одна ручка удержания. */
@@ -70,8 +56,6 @@ export type DebugHost = {
   camera: () => THREE.Camera | null;
   /** Меши для замера. Скрытые пропускаются. */
   parts: () => Array<{ name: BookProbePart['name']; mesh: THREE.Mesh }>;
-  /** Закладка: её положение подбирают панелью в углу мира. */
-  tab: TabTuning;
   /** Мишени ссылок текущего разворота. */
   links: () => Record<PageSide, readonly PageHotspot[]>;
 };
@@ -161,7 +145,6 @@ export function createBookDebug(host: DebugHost): BookDebug {
 
   return {
     freeze: host.hold,
-    tab: host.tab,
     links: host.links,
     probe: () => {
       const camera = host.camera();
