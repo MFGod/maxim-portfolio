@@ -1,7 +1,7 @@
 import { profile } from '@/data/profile';
 
 export const siteUrl =
-  process.env['NEXT_PUBLIC_SITE_URL'] ?? 'https://maxim-zicharev-resume.vercel.app';
+  process.env['NEXT_PUBLIC_SITE_URL'] ?? 'https://maxim-zhikharev.vercel.app';
 
 export const siteName = `${profile.name} — ${profile.role}`;
 
