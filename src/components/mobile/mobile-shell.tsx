@@ -9,7 +9,12 @@ import {
   labelOf,
 } from '@/components/applications/app-registry';
 import { CloseConfirmDialog } from '@/components/window/close-confirm-dialog';
-import { applications, launcherOrder, type AppId } from '@/data/applications';
+import {
+  applications,
+  launcherOrder,
+  windowMeta,
+  type AppId,
+} from '@/data/applications';
 import { profile } from '@/data/profile';
 import { useUrlSync } from '@/hooks/use-url-sync';
 import { cn } from '@/lib/cn';
@@ -46,7 +51,14 @@ export function MobileShell() {
             </h2>
           </header>
 
-          <main className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
+          <main
+            className={cn(
+              'min-h-0 flex-1',
+              windowMeta(active.app).chrome === 'glass'
+                ? 'overflow-hidden'
+                : 'scrollbar-thin overflow-y-auto',
+            )}
+          >
             <AppContent instance={active} />
           </main>
         </>

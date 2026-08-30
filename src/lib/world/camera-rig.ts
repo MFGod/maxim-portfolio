@@ -1,22 +1,9 @@
-/**
- * Риг: единственный владелец камеры.
- *
- * До него камерой распоряжались трое разом — OrbitControls писал в позицию,
- * цикл сцены двигал её на вектор скорости, оболочка выталкивала вверх. Любая
- * попытка поставить камеру программно откатывалась к следующему кадру, а в
- * режиме «от первого лица» и вовсе схлопывалась в точку взгляда. Планов камеры
- * в такой постановке быть не может.
- *
- * Теперь порядок такой: OrbitControls только **поставляет ввод**, а решает, где
- * окажется камера, риг. На время пролёта контрол выключается целиком, после —
- * получает обратно уже свершившееся положение через `update()`, иначе он
- * вернёт камеру в свои прежние сферические координаты.
- */
+/** Риг: единственный владелец камеры. */
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-import { CAMERA_FLOOR } from './bounds';
+import { CAMERA_BOUNDS, CAMERA_FLOOR } from './bounds';
 import {
   easeFlight,
   easeSettle,
@@ -37,14 +24,7 @@ export type FlightOptions = {
   durationMs?: number;
   /** Поставить камеру в конец пути сразу: «покой» и повторные заходы. */
   instant?: boolean;
-  /**
-   * Отдать направление взгляда мыши, оставив ригу только траекторию.
-   *
-   * Пролёт перестаёт быть роликом: посетитель летит по заданному пути, но
-   * смотрит куда хочет — и потому не выключается из происходящего, как это
-   * бывает на неотменяемой заставке. Пока мышь не тронули, взглядом правит
-   * план; первое же движение передаёт его человеку до конца пролёта.
-   */
+  /** Отдать направление взгляда мыши, оставив ригу только траекторию. */
   freeLook?: boolean;
 };
 
@@ -60,43 +40,22 @@ export type CameraRig = {
   flyTo: (key: PathKey, options?: FlightOptions) => Promise<void>;
   /** Прерывает пролёт и мягко возвращает управление. */
   cancel: () => void;
-  /**
-   * Осмотр с места: камера стоит, вращается только взгляд.
-   *
-   * Орбита для этого не годится — она вращает камеру вокруг точки впереди, и
-   * подобранный ракурс уплывает при первом же движении мыши.
-   */
+  /** Осмотр с места: камера стоит, вращается только взгляд. */
   setStationLook: (enabled: boolean) => void;
   /** Стоит ли камера в режиме осмотра. */
   readonly stationLook: boolean;
-  /**
-   * Доворачивает взгляд на месте — для покоя мира (`idle.ts`).
-   *
-   * Через риг, а не поворотом камеры снаружи: камера принадлежит ему одному
-   * (D3), и второй хозяин у неё однажды подрался бы с пролётом за тот же кадр.
-   * Работает только в осмотре с места и молчит в остальных режимах: у орбиты
-   * свой угол, а на пролёте камеру ведут опоры.
-   */
+  /** Доворачивает взгляд на месте — для покоя мира (`idle.ts`). */
   nudgeLook: (yaw: number) => void;
   setControlMode: (mode: ControlMode) => void;
+  /** Ход не с клавиатуры: экранный стик на сенсорном устройстве. */
+  setMove: (x: number, z: number) => void;
   setMoveSpeed: (speed: number) => void;
   /** Преграды: купол над рельефом и нижний предел над водой. */
   setCollisions: (enabled: boolean) => void;
   dispose: () => void;
 };
 
-/**
- * Предел наклона орбиты.
- *
- * В форке было 0.45π — камера всегда выше точки взгляда, чтобы не показывать
- * изнанку дна. Но половина подобранных ракурсов смотрит снизу вверх: у Древа,
- * у благодати Flexy — и там взгляд задран на десяток градусов. При старом
- * лимите контрол, получая управление после пролёта, честно восстанавливал свой
- * инвариант и подбрасывал камеру на четыре юнита вверх от точки прибытия.
- *
- * 0.62π разрешает смотреть примерно на двадцать градусов выше горизонта. Уйти
- * под рельеф это не даёт: там своя преграда — купол.
- */
+/** Предел наклона орбиты. */
 const ORBIT_MAX_POLAR = Math.PI * 0.62;
 
 /** Клавиша движения берётся по `code`: `key` меняется вместе с раскладкой. */
@@ -133,57 +92,19 @@ const LOOK_PITCH_LIMIT = (78 * Math.PI) / 180;
 /** Полоса, в которой предел высоты начинает действовать, а не срабатывает разом. */
 const LIMIT_MARGIN = 0.35;
 
-/**
- * Как быстро камера возвращается на план, когда преграда кончилась.
- *
- * Мгновенно нельзя. Замер по перелёту к берегу: камера полсекунды ехала по
- * куполу, обрыв кончился — и она за один кадр падала обратно к плану, разгон
- * доходил до 1607 юнитов в секунду за секунду при обычных пятнадцати.
- */
+/** Как быстро камера возвращается на план, когда преграда кончилась. */
 const RELEASE_RATE = 2.5;
 
-/**
- * За сколько подъём догоняет преграду.
- *
- * Пружиной, а не пределом скорости: предел скорости сам по себе даёт скачок —
- * подъём мгновенно трогается с места на восьми юнитах в секунду, и это те же
- * 529 юнитов в секунду за секунду, только в профиль. Критическое затухание
- * трогается с нуля и без перелёта через цель.
- */
+/** За сколько подъём догоняет преграду. */
 const LIFT_SETTLE = 0.34;
 
-/**
- * На сколько вперёд по пути камера смотрит на преграду.
- *
- * Скала поднималась навстречу по три юнита за кадр, и предел включался тем
- * кадром, которым до неё оставалось полметра: скорость подскакивала вчетверо.
- * Потолок берётся наибольшим из «под собой» и «где буду»: подъём тогда
- * начинается заранее и успевает пройти плавно.
- *
- * Мерится юнитами пути, а не временем: преграда — вещь геометрическая, а
- * скорость по пути гуляет впятеро. На медленном участке та же четверть секунды
- * давала меньше юнита предупреждения — упреждения не хватало ровно там, где
- * оно нужнее всего.
- */
+/** На сколько вперёд по пути камера смотрит на преграду. */
 const LOOK_AHEAD_UNITS = 3;
 
-/**
- * Сколько точек смотрим на этом отрезке.
- *
- * Одной конечной не хватает: план к ней уже поднимается, и худшее место
- * остаётся посередине. Замер по перелёту на восток — упреждение обещало 0.06
- * юнита подъёма там, где через три кадра требовалось 0.19. Восемь точек дают
- * шаг чуть меньше полуюнита: провалы там бывают и такой ширины.
- */
+/** Сколько точек смотрим на этом отрезке. */
 const LOOK_AHEAD_STEPS = 8;
 
-/**
- * Мягкий предел снизу: выше полосы значение не трогается, ниже — упирается.
- *
- * Жёсткое `if (y < limit) y = limit` рвёт скорость: кадр камера летела по
- * плану, следующий — ползёт по куполу. Плавный переход стоит долей юнита
- * запаса и не даёт излома. Ниже предела не опускает никогда.
- */
+/** Мягкий предел снизу: выше полосы значение не трогается, ниже — упирается. */
 function liftAbove(value: number, limit: number): number {
   const blend = Math.min(Math.max(0.5 + (value - limit) / (2 * LIMIT_MARGIN), 0), 1);
 
@@ -209,13 +130,13 @@ export function createCameraRig(
   let collisions = true;
 
   const keys = { up: false, down: false, left: false, right: false };
+  /** Отклонение экранного стика. Ноль — стик не тронут. */
+  const stick = { x: 0, z: 0 };
   const moveDirection = new THREE.Vector3();
   const velocity = new THREE.Vector3();
   const desiredVelocity = new THREE.Vector3();
   let smoothing = 0;
   let moving = true;
-
-  // --- Пролёт ---------------------------------------------------------------
 
   type Flight = {
     keys: PathKey[];
@@ -233,6 +154,8 @@ export function createCameraRig(
   let lookPitch = 0;
   let lookTaken = false;
   let dragging = false;
+  /** Прошлая точка указателя. */
+  const lastPointer = { x: 0, y: 0 };
 
   /** Осмотр с места: между шагами камера никуда не едет. */
   let stationLook = false;
@@ -246,17 +169,12 @@ export function createCameraRig(
 
   function stopMovement() {
     keys.up = keys.down = keys.left = keys.right = false;
+    stick.x = stick.z = 0;
     moveDirection.set(0, 0, 0);
     velocity.set(0, 0, 0);
   }
 
-  /**
-   * Возвращает управление контролу.
-   *
-   * Точка взгляда отставляется вперёд по направлению камеры: в конце пролёта
-   * она может оказаться в сотне юнитов, и орбита вращалась бы вокруг горизонта
-   * вместо того, что перед глазами.
-   */
+  /** Возвращает управление контролу. */
   function handOver() {
     const forward = scratch.set(0, 0, -1).applyQuaternion(camera.quaternion);
     const distance = fps ? 0.01 : HANDOVER_DISTANCE;
@@ -264,15 +182,6 @@ export function createCameraRig(
     controls.target.copy(camera.position).addScaledVector(forward, distance);
     controls.enabled = true;
 
-    /*
-     * Сглаживание гасим на один кадр.
-     *
-     * OrbitControls копит непогашенный поворот и сдвиг, а при включённом
-     * демпфировании только уменьшает их на долю за кадр. На передаче управления
-     * этот остаток доигрывался поверх прибытия и уводил камеру на четыре юнита
-     * вверх от точки, которую подбирали вживую. Один `update()` без
-     * демпфирования обнуляет накопленное, дальше плавность возвращается.
-     */
     const damping = controls.enableDamping;
     controls.enableDamping = false;
     controls.update();
@@ -303,8 +212,6 @@ export function createCameraRig(
       return;
     }
 
-    // Углы берём из текущего направления: осмотр начинается с того кадра, на
-    // котором камера остановилась, а не с произвольного севера.
     takeLook();
     controls.enabled = false;
     stopMovement();
@@ -315,11 +222,6 @@ export function createCameraRig(
     const holdLook = done?.freeLook ?? false;
     flight = null;
 
-    /*
-     * После шага камера остаётся на станции и осматривается, а не отдаётся
-     * орбите. Иначе первое же движение мыши уводило бы её с точки, которую
-     * подбирали вживую, — а пошаговый режим ровно об этом: стоишь и смотришь.
-     */
     if (holdLook) setStationLook(true);
     else handOver();
 
@@ -329,14 +231,6 @@ export function createCameraRig(
   function fly(keys: PathKey[], options: FlightOptions = {}): Promise<void> {
     if (keys.length === 0) return Promise.resolve();
 
-    /*
-     * Прежний пролёт завершается, а не встаёт в очередь: два плана камеры
-     * одновременно — это всегда ошибка вызова, а не замысел.
-     *
-     * Именно завершается, с вызовом `resolve`. `cancel()` здесь не годится: он
-     * начинает мягкую доводку, а её тут же затирает новый пролёт — и обещание
-     * старого висит незакрытым, вместе с ним и признак «летим» у вызвавшего.
-     */
     if (flight) {
       const previous = flight;
       flight = null;
@@ -357,7 +251,6 @@ export function createCameraRig(
     stopMovement();
     lookTaken = false;
     dragging = false;
-    // Новый пролёт начинается с нуля: подъём прошлого к его преградам и относился.
     lift = 0;
     liftSpeed = 0;
 
@@ -377,8 +270,6 @@ export function createCameraRig(
   function cancel() {
     if (!flight) return;
 
-    // Пропуск не телепорт: резкая склейка читается как поломка, а не как «я
-    // нажал». Дальше доводим камеру в конец пути за долю секунды.
     if (!flight.settleFrom) {
       flight.settleFrom = {
         position: camera.position.clone(),
@@ -423,20 +314,6 @@ export function createCameraRig(
 
     camera.position.set(...pose.position);
 
-    /*
-     * Преграды: пол над водой и купол над рельефом.
-     *
-     * Пол соблюдается даже в пролёте — план может задеть склон, но нырять под
-     * воду камере нельзя нигде и никогда. Купол тоже: замер по входу показывал
-     * заход под рельеф на 1.29 юнита, то есть пролёт сквозь скалу.
-     *
-     * Поднимается только высота, точка взгляда остаётся плановой: план решает,
-     * что показать, оболочка — где при этом можно находиться.
-     *
-     * Подъём держится состоянием и опадает со скоростью `RELEASE_RATE`. Без
-     * этого камера возвращалась на план тем же кадром, которым кончалась
-     * преграда, — а кончается она резко, обрывом.
-     */
     /** Сколько не хватает высоты в точке: пол над водой и купол над рельефом. */
     const shortfall = (point: Point3) => {
       const ceiling = collisions ? shellHeightAt(point[0], point[2]) : null;
@@ -447,12 +324,6 @@ export function createCameraRig(
 
     const here = shortfall(pose.position);
 
-    /*
-     * Заглядываем вперёд — и сравниваем будущую преграду с будущей плановой
-     * высотой, а не с нынешней. Иначе камера лезет вверх там, где план и сам
-     * успевает подняться: замер после первой попытки дал 529 юнитов в секунду
-     * за секунду ровно на таких участках.
-     */
     const total = pathLengths(flight.keys).total;
     const walked = easeFlight(t);
     const window = total > 0 ? LOOK_AHEAD_UNITS / total : 0;
@@ -465,22 +336,14 @@ export function createCameraRig(
     }
 
     if (need < lift) {
-      // Преграда кончилась — опадаем медленно, обрыв кончается резко.
       lift = Math.max(need, lift - RELEASE_RATE * delta);
       liftSpeed = 0;
     } else {
-      // Пружина с критическим затуханием: трогается с нуля, цель не проскакивает.
       const rate = 2 / LIFT_SETTLE;
       liftSpeed += (rate * rate * (need - lift) - 2 * rate * liftSpeed) * delta;
       lift += liftSpeed * delta;
     }
 
-    /*
-     * Нижняя граница самого подъёма, а не отдельная проверка поверх него.
-     * Проверкой поверх камера ехала по куполу мимо `lift`, а когда обрыв
-     * кончался — падала на план тем же кадром: замер давал 1198 юнитов в
-     * секунду за секунду. Так подъём остаётся тем, что есть, и опадает сам.
-     */
     if (here > lift) {
       lift = here;
       liftSpeed = 0;
@@ -492,15 +355,11 @@ export function createCameraRig(
       aimByAngles();
     } else {
       controls.target.set(...pose.look);
-      // Поворот на ригe: контрол выключен, и без этого камера летит, не меняя
-      // направления взгляда, — путь идёт мимо кадра.
       camera.lookAt(controls.target);
     }
 
     if (t >= 1) finish();
   }
-
-  // --- Ручное управление ----------------------------------------------------
 
   function advanceManual(delta: number) {
     if (fps) {
@@ -509,7 +368,9 @@ export function createCameraRig(
       moveDirection.z += keys.down ? 1 : 0;
       moveDirection.x += keys.left ? -1 : 0;
       moveDirection.x += keys.right ? 1 : 0;
-      moveDirection.normalize();
+      moveDirection.x += stick.x;
+      moveDirection.z += stick.z;
+      if (moveDirection.length() > 1) moveDirection.normalize();
     }
 
     desiredVelocity.copy(moveDirection).applyEuler(camera.rotation);
@@ -537,23 +398,50 @@ export function createCameraRig(
     moving = moveDirection.length() === 0;
   }
 
+  /** Не пускает камеру за границы карты. */
+  function keepInsideBounds(camera: THREE.Camera, target: THREE.Vector3) {
+    const x = Math.min(
+      Math.max(camera.position.x, CAMERA_BOUNDS.minX),
+      CAMERA_BOUNDS.maxX,
+    );
+    const z = Math.min(
+      Math.max(camera.position.z, CAMERA_BOUNDS.minZ),
+      CAMERA_BOUNDS.maxZ,
+    );
+    if (x === camera.position.x && z === camera.position.z) return;
+
+    target.x += x - camera.position.x;
+    target.z += z - camera.position.z;
+    camera.position.x = x;
+    camera.position.z = z;
+  }
+
   function update(delta: number) {
     if (flight) {
       advanceFlight(delta);
-      return;
-    }
-
-    if (stationLook) {
-      // Позиция не меняется: камера стоит там, куда её привёл шаг.
+    } else if (stationLook) {
       aimByAngles();
-      return;
+    } else {
+      advanceManual(delta);
     }
 
-    advanceManual(delta);
+    keepInsideBounds(camera, controls.target);
+  }
+
+  /**
+   * Экранный стик. Выводит из осмотра ровно так же, как шаг клавишей: раз
+   * посетитель пошёл сам, держать его на станции незачем.
+   */
+  function setMove(x: number, z: number) {
+    if (!fps) return;
+    if (stationLook && (x !== 0 || z !== 0)) setStationLook(false);
+    if (flight && (x !== 0 || z !== 0)) cancel();
+
+    stick.x = Math.min(Math.max(x, -1), 1);
+    stick.z = Math.min(Math.max(z, -1), 1);
   }
 
   function setControlMode(mode: ControlMode) {
-    // Переключатель камеры — это просьба управлять самому: осмотр уступает.
     if (stationLook) setStationLook(false);
 
     fps = mode === 'fps';
@@ -567,13 +455,10 @@ export function createCameraRig(
     controls.enablePan = !fps;
     controls.minDistance = fps ? 0 : 0.5;
     controls.maxDistance = fps ? 0.01 : 60;
-    // В FPS взгляд по горизонту — ровно 90°, лимит орбиты заблокировал бы мышь.
     controls.maxPolarAngle = fps ? Math.PI : ORBIT_MAX_POLAR;
 
     if (!fps) stopMovement();
   }
-
-  // --- Ввод -----------------------------------------------------------------
 
   const onKey = (event: KeyboardEvent, pressed: boolean) => {
     if (!fps || event.shiftKey) return;
@@ -582,13 +467,8 @@ export function createCameraRig(
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
-    // Любая клавиша прерывает пролёт: ждать, пока кино доиграет, никто не обязан.
     if (flight) cancel();
 
-    /*
-     * Шаг вперёд ногами выводит из осмотра: раз посетитель пошёл сам, держать
-     * его на станции незачем. Возврат на маршрут — кнопками панели.
-     */
     if (stationLook && !event.shiftKey && MOVEMENT_KEYS[event.code]) {
       setStationLook(false);
     }
@@ -610,6 +490,8 @@ export function createCameraRig(
     }
 
     dragging = true;
+    lastPointer.x = event.clientX;
+    lastPointer.y = event.clientY;
     if (!lookTaken) takeLook();
     element.setPointerCapture?.(event.pointerId);
   };
@@ -618,9 +500,14 @@ export function createCameraRig(
     const aiming = stationLook || flight?.freeLook;
     if (!aiming || !dragging) return;
 
-    lookYaw -= event.movementX * LOOK_SENSITIVITY;
+    const deltaX = event.clientX - lastPointer.x;
+    const deltaY = event.clientY - lastPointer.y;
+    lastPointer.x = event.clientX;
+    lastPointer.y = event.clientY;
+
+    lookYaw -= deltaX * LOOK_SENSITIVITY;
     lookPitch = Math.min(
-      Math.max(lookPitch - event.movementY * LOOK_SENSITIVITY, -LOOK_PITCH_LIMIT),
+      Math.max(lookPitch - deltaY * LOOK_SENSITIVITY, -LOOK_PITCH_LIMIT),
       LOOK_PITCH_LIMIT,
     );
   };
@@ -631,8 +518,6 @@ export function createCameraRig(
   };
 
   const onWheel = () => {
-    // Колесо на свободном взгляде ничего не значит: дистанции нет, менять
-    // нечего — а прерывать пролёт случайной прокруткой обидно.
     if (flight && !flight.freeLook) cancel();
   };
 
@@ -644,12 +529,7 @@ export function createCameraRig(
   element.addEventListener('pointercancel', onPointerUp);
   element.addEventListener('wheel', onWheel, { passive: true });
 
-  /**
-   * Всё, что мешает камере в точке: рельеф с оболочкой и стоящие на нём объекты.
-   *
-   * Оболочка знает только рельеф, поэтому деревья и башни спрашиваем отдельно —
-   * без этого путь шёл сквозь них.
-   */
+  /** Всё, что мешает камере в точке: рельеф с оболочкой и стоящие на нём объекты. */
   function ceilingAt(x: number, z: number): number | null {
     const shell = shellHeightAt(x, z);
     const obstacle = obstacleHeightAt(x, z);
@@ -659,13 +539,7 @@ export function createCameraRig(
     return Math.max(shell, obstacle);
   }
 
-  /**
-   * Перелёт от текущего положения к одной точке.
-   *
-   * Первая опора — то, где камера уже стоит, поэтому шаг между станциями
-   * начинается без рывка, откуда бы посетитель ни смотрел. Путь между ними
-   * планируется: прямая почти всегда во что-нибудь упирается.
-   */
+  /** Перелёт от текущего положения к одной точке. */
   function flyTo(key: PathKey, options: FlightOptions = {}): Promise<void> {
     const from: PathKey = {
       at: [camera.position.x, camera.position.y, camera.position.z],
@@ -694,6 +568,7 @@ export function createCameraRig(
       lookYaw += yaw;
     },
     setControlMode,
+    setMove,
     setMoveSpeed: (speed: number) => {
       moveSpeed = speed;
     },

@@ -5,7 +5,14 @@ import { useSyncExternalStore } from 'react';
 import { useRuntimeEnvironment } from '@/hooks/use-runtime-environment';
 import { useSetting } from '@/lib/settings/hooks';
 
-import { detectWebgl2, worldSupport, type WorldSupport } from './capability';
+import {
+  detectWebgl2,
+  worldQuality,
+  worldSupport,
+  type WorldEnvironment,
+  type WorldQuality,
+  type WorldSupport,
+} from './capability';
 
 /**
  * Поддержка WebGL2 неизменна на всю сессию, поэтому это не состояние, а
@@ -20,28 +27,46 @@ const webgl2Store = {
     if (webgl2Cache === null) webgl2Cache = detectWebgl2();
     return webgl2Cache;
   },
-  // На сервере считаем, что WebGL2 есть: иначе при гидратации мелькнёт
-  // сообщение о неподдерживаемом браузере у тех, у кого всё в порядке.
   getServerSnapshot: () => true,
 };
 
-/** Готовность машины к трёхмерному миру. */
-export function useWorldSupport(): WorldSupport {
+/** `navigator.deviceMemory` в гигабайтах. `null` — браузер его не сообщает. */
+function deviceMemory(): number | null {
+  if (typeof navigator === 'undefined') return null;
+  return (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null;
+}
+
+/** Уровень отрисовки, снятый с браузера напрямую. */
+export function detectWorldQuality(): WorldQuality {
+  return worldQuality({
+    viewportWidth: window.innerWidth,
+    animations: 'full',
+    webgl2: true,
+    deviceMemory: deviceMemory(),
+    coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+  });
+}
+
+/** Окружение, от которого зависит допуск в мир. */
+function useWorldEnvironment(): WorldEnvironment {
   const animations = useSetting((settings) => settings.motion.animations);
-  const { viewport } = useRuntimeEnvironment();
+  const { viewport, device } = useRuntimeEnvironment();
   const webgl2 = useSyncExternalStore(
     webgl2Store.subscribe,
     webgl2Store.getSnapshot,
     webgl2Store.getServerSnapshot,
   );
 
-  return worldSupport({
+  return {
     viewportWidth: viewport?.width ?? null,
     animations,
     webgl2,
-    deviceMemory:
-      typeof navigator === 'undefined'
-        ? null
-        : ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null),
-  });
+    deviceMemory: deviceMemory(),
+    coarsePointer: device !== null && device !== 'desktop',
+  };
+}
+
+/** Готовность машины к трёхмерному миру. */
+export function useWorldSupport(): WorldSupport {
+  return worldSupport(useWorldEnvironment());
 }

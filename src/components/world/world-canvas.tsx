@@ -3,15 +3,19 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { experience } from '@/data/resume';
+import { useAmbience } from '@/hooks/use-ambience';
+import { useContainerWide } from '@/hooks/use-container-width';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { useTranslate } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 import { useResolvedTheme, useSetting } from '@/lib/settings/hooks';
+import { detectWorldQuality } from '@/lib/world/use-world-support';
 import { DEV_TOOLS } from '@/lib/world/dev-tools';
 import { stations } from '@/lib/world/shots';
 import type { ControlMode, World } from '@/lib/world/scene';
 
 import { WorldMenu } from './world-menu';
+import { WorldStick } from './world-stick';
 
 /**
  * Инструменты подбора. Отдельным чанком и только в разработке: `DEV_TOOLS` —
@@ -24,13 +28,10 @@ const WorldDevOverlay = DEV_TOOLS
     })
   : null;
 
-/**
- * Канвас мира. Единственное место, где сцена встречается с React.
- *
- * Мир создаётся только когда у канваса появился ненулевой размер: OrbitControls
- * делит угол поворота на высоту элемента, и при нуле в позицию камеры попадает
- * NaN, после которого состояние контрола не лечится ничем, кроме пересоздания.
- */
+/** Положение камеры, с которым мир открывается. */
+const INITIAL_MODE: ControlMode = 'fps';
+
+/** Канвас мира. Единственное место, где сцена встречается с React. */
 type Props = {
   /**
    * Обстановка вокруг канваса: полоса загрузки и переключатель камеры. На
@@ -60,60 +61,51 @@ export function WorldCanvas({
   className,
 }: Props = {}) {
   const t = useTranslate();
+  const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const worldRef = useRef<World | null>(null);
   const [progress, setProgress] = useState(0);
   const [ready, setReady] = useState(false);
-  /**
-   * Мир не собрался: геометрия не приехала.
-   *
-   * Отдельно от `ready`, потому что это не «ещё не готов», а «уже не будет».
-   * Без этого состояния отказ загрузки оставлял полосу замершей на её проценте,
-   * и сайт выглядел зависшим — а причина обычно поправимая: сеть.
-   */
+  /** Мир не собрался: геометрия не приехала. */
   const [failed, setFailed] = useState(false);
-  const [mode, setMode] = useState<ControlMode>('orbit');
+  const [mode, setMode] = useState<ControlMode>(INITIAL_MODE);
   /** Идёт ли кинематографический вход: пока идёт, показываем «пропустить». */
   const [flying, setFlying] = useState(false);
   /** На какой станции стоим. Первая — благодать под Древом, начало пути. */
   const [station, setStation] = useState(0);
   /** Пройденная глава по счёту мира: её же копит панель навыков. */
-  /**
-   * Мир в облёте — хранитель экрана.
-   *
-   * Панели на это время уходят: ролик с забытым интерфейсом поверх читается
-   * не миром, а брошенной вкладкой. Возвращает их любое касание — за этим
-   * следит сцена, она же и сообщает сюда.
-   */
+  /** Мир в облёте — хранитель экрана. */
   const [resting, setResting] = useState(false);
   /**
-   * Экранное затенение: мягкая тень в углах.
-   *
-   * Состояние держится здесь, а не читается у мира каждый кадр: меняют его
-   * раз в сеанс, а перерисовывать меню шестьдесят раз в секунду незачем.
+   * Фоновая музыка. Только там, где есть обстановка: на рабочем столе мир —
+   * фон без меню, и звук оттуда было бы нечем выключить.
    */
-  const [occlusion, setOcclusion] = useState(true);
-  /** Подсказка про осмотр: гаснет, как только мышь тронула сцену. */
+  const ambience = useAmbience(chrome);
+  /** Подсказка про осмотр: гаснет, как только указатель тронул сцену. */
   const [hinted, setHinted] = useState(false);
   /** Раскрыта ли книга-резюме. Само состояние живёт в сцене, здесь — отражение. */
   const [bookOpen, setBookOpen] = useState(false);
+  /**
+   * Номер разворота на виду. Тоже отражение: книгу листают и щелчком по самой
+   * странице, поэтому число приходит из сцены, а не считается здесь.
+   */
+  const [spread, setSpread] = useState(0);
+  /** Сколько всего разворотов. Ноль до загрузки книги — полоса тогда и не видна. */
+  const [spreads, setSpreads] = useState(0);
+
+  const roomy = useContainerWide(frameRef, 560);
+  /**
+   * Грубый указатель — палец. Клавиатуры при нём обычно нет, и ход по миру в
+   * виде от первого лица приходится отдавать экранному стику.
+   */
+  const coarsePointer = useMediaQuery('(pointer: coarse)');
 
   const animations = useSetting((settings) => settings.motion.animations);
-  /*
-   * Настройка движения читается через ссылку: положить её в зависимости эффекта
-   * значит пересобирать мир на 27 МБ при каждом переключении «покоя», а он
-   * влияет ровно на один момент — как отработает вход.
-   */
   const animationsRef = useRef(animations);
   useEffect(() => {
     animationsRef.current = animations;
   }, [animations]);
 
-  /*
-   * Язык — той же дорогой, что и покой: через ссылку, чтобы смена языка не
-   * пересобирала мир. Страницы книги перерисовываются отдельной командой:
-   * ключ слота языком уже помечен, и в пуле лежат обе версии разворота.
-   */
   const locale = useSetting((settings) => settings.language);
   const localeRef = useRef(locale);
   useEffect(() => {
@@ -121,10 +113,6 @@ export function WorldCanvas({
     worldRef.current?.book.relabel();
   }, [locale]);
 
-  /*
-   * Тема — той же дорогой. Мир идёт за ней светом: полдень, открытый из
-   * тёмного интерфейса, читается чужой вкладкой, а не продолжением сайта.
-   */
   const theme = useResolvedTheme();
   const themeRef = useRef(theme);
   useEffect(() => {
@@ -140,46 +128,30 @@ export function WorldCanvas({
     let observer: ResizeObserver | null = null;
 
     const boot = async () => {
-      // Сцена весит мегабайты — грузим её только когда мир действительно нужен.
       const { createWorld } = await import('@/lib/world/scene');
       if (disposed) return;
 
       const world = createWorld(canvas, {
         onProgress: setProgress,
-        // Через ссылку, а не значением: пересобирать мир на 27 МБ ради смены
-        // настройки движения нельзя, а книге нужен ответ на момент перехода.
+        quality: detectWorldQuality(),
         reducedMotion: () => animationsRef.current !== 'full',
         locale: () => localeRef.current,
         theme: () => themeRef.current,
-        /*
-         * Счётчик станций идёт за миром. До главы доходят и пешком, минуя
-         * «Назад» и «Дальше», — без этого полоса показывала бы вход, пока
-         * посетитель стоит у Flexy.
-         */
         onRest: setResting,
-        // Щелчок по тому идёт мимо оболочки — луч ловит сама книга. Без этого
-        // дорожка глав оставалась бы на кадре под раскрытым разворотом.
         onBook: setBookOpen,
-        onChapter: (positionId) => {
-          if (!positionId) return;
-
-          const index = stations().findIndex((stop) => stop.positionId === positionId);
-          if (index >= 0) setStation(index);
-        },
+        onSpread: setSpread,
         onFailed: () => setFailed(true),
         onLoaded: () => {
           setReady(true);
+          setSpreads(world.book.spreadCount);
+          setSpread(world.book.spread);
 
-          /*
-           * Мир открывается на первой станции — у благодати под Древом. Дальше
-           * посетитель идёт сам: путь по карьере проходят, а не смотрят, и
-           * автоматический пролёт отнимал бы у него ровно это.
-           */
+          world.setControlMode(INITIAL_MODE);
+
           const first = stations()[0];
           if (!first) return;
 
           world.rig.fly([first.shot], { instant: true });
-          // Осмотр с места сразу: посетитель стоит на станции и вертит головой.
           world.rig.setStationLook(true);
         },
       });
@@ -206,11 +178,6 @@ export function WorldCanvas({
     };
   }, []);
 
-  /*
-   * Ссылка на живой мир для инструментов подбора. Функцией и через
-   * `useCallback`: мир появляется после загрузки, а `worldRef.current` меняется
-   * молча — эффекты оверлея должны спрашивать его сами, а не пересобираться.
-   */
   const liveWorld = useCallback(() => worldRef.current, []);
 
   const switchMode = (next: ControlMode) => {
@@ -224,36 +191,6 @@ export function WorldCanvas({
 
   const stops = stations();
 
-  /**
-   * Первая станция главы или −1.
-   *
-   * По `positionId`, а не по совпадению ракурсов: прибытие первой главы лежит
-   * в точках входа, и сравнение самих ракурсов там не сходится.
-   */
-  const stationOfChapter = (positionId: string) =>
-    stops.findIndex((stop) => stop.positionId === positionId);
-
-  /** Подпись станции: компания из резюме, а не служебный идентификатор. */
-  const stationTitle = (index: number) => {
-    const stop = stops[index];
-    if (!stop) return '';
-
-    const company = experience.find(
-      (position) => position.id === stop.label.split(' ')[0],
-    )?.company;
-
-    return company ?? stop.label;
-  };
-
-  /** Переключает затенение. Выбор посетителя старше пробы качества. */
-  const switchOcclusion = (enabled: boolean) => {
-    const world = worldRef.current;
-    if (!world) return;
-
-    world.occlusion.set(enabled);
-    setOcclusion(world.occlusion.enabled);
-  };
-
   const toggleBook = () => {
     const world = worldRef.current;
     if (!world) return;
@@ -262,6 +199,41 @@ export function WorldCanvas({
     setBookOpen(world.book.opened);
   };
 
+  /** Убирает раскрытую книгу. */
+  const closeBook = () => {
+    const world = worldRef.current;
+    if (!world) return;
+
+    world.book.close();
+    setBookOpen(world.book.opened);
+  };
+
+  /** Листает разворот кнопкой полосы. */
+  const turnBook = (step: 1 | -1) => () => {
+    const world = worldRef.current;
+    if (!world) return;
+
+    if (step === 1) void world.book.next();
+    else void world.book.previous();
+  };
+
+  useEffect(() => {
+    if (!bookOpen) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+
+      const world = worldRef.current;
+      if (!world?.book.opened) return;
+
+      world.book.close();
+      setBookOpen(false);
+    };
+
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [bookOpen]);
+
   /** Раскрывает книгу сразу на подсказках. */
   const openGuide = () => {
     const world = worldRef.current;
@@ -269,27 +241,6 @@ export function WorldCanvas({
 
     world.book.guide();
     setBookOpen(world.book.opened);
-  };
-
-  /**
-   * «На путь»: возвращает камеру к следующей главе.
-   *
-   * Отдельно от «Дальше»: та ведёт по станциям — их двадцать две, и половина
-   * это виды зоны, — а эта возвращает на маршрут карьеры из любой точки, куда
-   * посетитель забрёл сам. Куда именно, решает мир: прогресс считает он.
-   */
-  const followPath = () => {
-    const world = worldRef.current;
-    const target = world?.route.target();
-    if (!world || !target) return;
-
-    const index = stationOfChapter(target.positionId);
-    if (index >= 0) setStation(index);
-
-    setFlying(true);
-    void world.rig
-      .flyTo(target.shot, { freeLook: true })
-      .finally(() => setFlying(false));
   };
 
   const goToStation = (index: number) => {
@@ -304,6 +255,7 @@ export function WorldCanvas({
 
   return (
     <div
+      ref={frameRef}
       className={cn(
         'relative overflow-hidden',
         chrome && !fill && 'border-line-subtle bg-surface-2 rounded-sm border',
@@ -317,8 +269,6 @@ export function WorldCanvas({
         className={cn(
           'block w-full',
           chrome && !fill ? 'h-[min(60vh,480px)]' : 'h-full',
-          // Проявляется, когда геометрия догрузилась: пустой чёрный канвас на
-          // полсекунды заметнее, чем плавное появление.
           'transition-opacity duration-(--duration-slow)',
           ready ? 'opacity-100' : 'opacity-0',
           !interactive && 'pointer-events-none',
@@ -341,11 +291,6 @@ export function WorldCanvas({
         </div>
       ) : null}
 
-      {/*
-        Отказ загрузки. Причина обычно поправимая — сеть, — поэтому здесь не
-        только сообщение, но и способ попробовать снова: перезагрузка страницы
-        поднимает мир с нуля, а частично собранную сцену чинить нечем.
-      */}
       {chrome && failed ? (
         <div className="bg-surface-1/80 absolute inset-0 grid place-items-center backdrop-blur-sm">
           <div className="max-w-72 text-center">
@@ -362,52 +307,50 @@ export function WorldCanvas({
         </div>
       ) : null}
 
-      {/*
-        Дорожка глав уходит с кадра, пока книга раскрыта: разворот встаёт
-        посреди экрана и накрывает её собой, а полупрозрачная плашка поверх
-        страницы читается грязью на бумаге. Меню в правом верхнем углу
-        остаётся — им книгу и закрывают.
-      */}
       {chrome && ready && !resting && !bookOpen ? (
         <nav
           aria-label={t('world.steps.label')}
-          className="border-book-rule bg-glass-book absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-sm border p-1 shadow-sm backdrop-blur-sm"
+          className={cn(
+            'border-book-rule bg-glass-book absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-sm border p-1 shadow-sm backdrop-blur-sm',
+            coarsePointer && mode === 'fps' && 'right-5 left-auto translate-x-0',
+          )}
         >
           <button
             type="button"
             onClick={() => goToStation(station - 1)}
             disabled={station <= 0}
-            className="text-book-ink-muted hover:text-book-ink rounded-xs px-2.5 py-1.5 text-xs disabled:opacity-35"
+            className={cn(
+              'text-book-ink-muted hover:text-book-ink rounded-xs py-1.5 text-xs whitespace-nowrap disabled:opacity-35',
+              roomy ? 'px-2.5' : 'px-2',
+            )}
           >
             {t('world.steps.back')}
           </button>
 
-          <p className="text-2xs text-book-ink-muted min-w-36 px-1 text-center font-mono">
-            {station + 1}/{stops.length} · {stationTitle(station)}
+          <p className="text-2xs text-book-ink-muted min-w-0 px-1 text-center font-mono whitespace-nowrap">
+            {station + 1}/{stops.length}
           </p>
 
           <button
             type="button"
             onClick={() => goToStation(station + 1)}
             disabled={station >= stops.length - 1}
-            className="text-book-ink-muted hover:text-book-ink rounded-xs px-2.5 py-1.5 text-xs disabled:opacity-35"
+            className={cn(
+              'text-book-ink-muted hover:text-book-ink rounded-xs py-1.5 text-xs whitespace-nowrap disabled:opacity-35',
+              roomy ? 'px-2.5' : 'px-2',
+            )}
           >
             {t('world.steps.next')}
-          </button>
-
-          <button
-            type="button"
-            onClick={followPath}
-            className="border-book-rule text-book-ink-muted hover:text-book-ink ml-1 rounded-xs border-l px-2.5 py-1.5 text-xs"
-          >
-            {t('world.steps.toPath')}
           </button>
 
           {flying ? (
             <button
               type="button"
               onClick={skipFlight}
-              className="border-book-rule text-book-ink-muted hover:text-book-ink ml-1 rounded-xs border-l px-2.5 py-1.5 text-xs"
+              className={cn(
+                'border-book-rule text-book-ink-muted hover:text-book-ink ml-1 rounded-xs border-l py-1.5 text-xs whitespace-nowrap',
+                roomy ? 'px-2.5' : 'px-2',
+              )}
             >
               {t('world.controls.skip')}
             </button>
@@ -415,17 +358,60 @@ export function WorldCanvas({
         </nav>
       ) : null}
 
+      {chrome && ready && !resting && bookOpen && spreads > 0 ? (
+        <nav
+          aria-label={t('world.book.label')}
+          className="border-book-rule bg-glass-book absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-sm border p-1 shadow-sm backdrop-blur-sm"
+        >
+          <button
+            type="button"
+            onClick={turnBook(-1)}
+            disabled={spread <= 0}
+            aria-label={t('world.book.previous')}
+            className={cn(
+              'text-book-ink-muted hover:text-book-ink rounded-xs py-1.5 text-xs disabled:opacity-35',
+              roomy ? 'px-2.5' : 'px-2',
+            )}
+          >
+            ‹
+          </button>
+
+          <p className="text-2xs text-book-ink-muted min-w-0 px-1 text-center font-mono whitespace-nowrap">
+            {spread + 1}/{spreads}
+          </p>
+
+          <button
+            type="button"
+            onClick={turnBook(1)}
+            disabled={spread >= spreads - 1}
+            aria-label={t('world.book.next')}
+            className={cn(
+              'text-book-ink-muted hover:text-book-ink rounded-xs py-1.5 text-xs disabled:opacity-35',
+              roomy ? 'px-2.5' : 'px-2',
+            )}
+          >
+            ›
+          </button>
+
+          <button
+            type="button"
+            onClick={closeBook}
+            className={cn(
+              'border-book-rule text-book-ink-muted hover:text-book-ink ml-1 rounded-xs border-l py-1.5 text-xs whitespace-nowrap',
+              roomy ? 'px-2.5' : 'px-2',
+            )}
+          >
+            {t('world.book.closeShort')}
+          </button>
+        </nav>
+      ) : null}
+
       {chrome && ready && !resting && !hinted && !flying && !bookOpen ? (
-        <p className="text-2xs text-book-paper pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 font-mono drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+        <p className="text-2xs text-book-paper pointer-events-none absolute bottom-18 left-1/2 max-w-[min(90%,22rem)] -translate-x-1/2 text-center font-mono drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
           {t('world.steps.hint')}
         </p>
       ) : null}
 
-      {/*
-        Камера, книга и выход собраны в одно меню: три отдельные плашки по
-        углам кадра спорили и между собой, и с книгой, которая лежит в правом
-        нижнем углу — ровно там, где стояла кнопка «Открыть резюме».
-      */}
       {chrome && ready && !resting ? (
         <WorldMenu
           mode={mode}
@@ -433,10 +419,16 @@ export function WorldCanvas({
           bookOpen={bookOpen}
           onToggleBook={toggleBook}
           onGuide={openGuide}
-          occlusion={occlusion}
-          onOcclusion={switchOcclusion}
+          ambience={ambience.choice}
+          onAmbience={ambience.select}
+          volume={ambience.volume}
+          onVolume={ambience.setVolume}
           homeHref={homeHref}
         />
+      ) : null}
+
+      {chrome && ready && !resting && !bookOpen && coarsePointer && mode === 'fps' ? (
+        <WorldStick onMove={(x, z) => worldRef.current?.rig.setMove(x, z)} />
       ) : null}
 
       {WorldDevOverlay && chrome ? (

@@ -1,11 +1,6 @@
 /**
  * Ракурсы и оболочка камеры: как утверждённый вид превращается в разрешение
  * туда встать.
- *
- * Купол держит камеру в трети юнита над рельефом — этого хватает для прогулки,
- * но не для кадра у самой земли. Вместо списка исключений, который неизбежно
- * разойдётся с данными, каждое место из `world-shots.ts` объявляет себя
- * проходимым само: где кто-то поставил камеру и увидел кадр, туда пускают.
  */
 
 import { worldBattles } from '@/data/world-battles';
@@ -42,16 +37,7 @@ export function pocketOf(shot: WorldShot): ShellPocket {
   };
 }
 
-/**
- * Карманы стычек: место, откуда на бой смотрят.
- *
- * Без них к бою не подойти. Купол держит камеру примерно в трети юнита над
- * рельефом, а стычка — это фигуры ростом 0,117: с высоты купола шесть бойцов
- * занимают десяток пикселей, и «перенести камеру к стычке» означает показать
- * розовое пятно равнины. Карман опускает потолок ровно там, где стоит ракурс
- * боя, — тем же способом, каким объявляет себя проходимым любой утверждённый
- * кадр мира.
- */
+/** Карманы стычек: место, откуда на бой смотрят. */
 export function battlePockets(): ShellPocket[] {
   return worldBattles.map((battle) => {
     const view = battleView(battle);
@@ -79,14 +65,7 @@ export type RouteStop = {
   branch: boolean;
 };
 
-/**
- * Маршрут по главам в хронологии карьеры.
- *
- * Порядок берётся из `world-places.ts`, а не из расстановки в `world-shots.ts`:
- * ракурсы — про кадр, хронология — про резюме, и смешивать их значит однажды
- * поменять порядок работ и не заметить, что камера пошла не туда. Ответвление
- * идёт последним и в основной путь не входит — так же, как на плоском плане.
- */
+/** Маршрут по главам в хронологии карьеры. */
 export function routeStops(): RouteStop[] {
   const ordered = [...mainRoute(), ...worldChapters.filter((c) => c.branch)];
 
@@ -117,26 +96,13 @@ export function peakPath(): WorldShot[] {
   return [...peakRoute.via, peakRoute.arrival];
 }
 
-/**
- * Точка пути: сама камера, подпись и глава, к которой она относится.
- *
- * `positionId` держит связь с резюме: станция — не просто красивый вид, а
- * место главы карьеры, и подпись с содержимым берутся из `experience.ts` по
- * этому идентификатору. Без него мир остаётся картинкой.
- */
+/** Точка пути: сама камера и подпись к ней. */
 export type FlightPoint = {
   label: string;
   shot: WorldShot;
-  /** `Position.id` из `experience.ts`; пусто у входа и вершины. */
-  positionId?: string;
 };
 
-/**
- * Полный пролёт: вход, затем главы по хронологии.
- *
- * Вход уже заканчивается прибытием первой главы, поэтому её точки берутся из
- * него — иначе камера пришла бы к Flexy дважды.
- */
+/** Полный пролёт: вход, затем главы по хронологии. */
 export function flightPath(): FlightPoint[] {
   const stops = routeStops();
   const first = stops[0];
@@ -148,7 +114,7 @@ export function flightPath(): FlightPoint[] {
 
   const rest = stops.slice(1).flatMap((stop) =>
     stop.path.map((shot) => ({
-      label: stop.branch ? `${stop.positionId} · ветка` : stop.positionId,
+      label: stop.branch ? `${stop.positionId}, ветка` : stop.positionId,
       shot,
     })),
   );
@@ -164,49 +130,22 @@ export function peakFlight(): FlightPoint[] {
   }));
 }
 
-/**
- * Все ракурсы в порядке осмотра — станции, по которым идут шагом.
- *
- * Пролёт показывает четыре точки из двадцати четырёх: он про то, чтобы попасть
- * в мир, а не обойти его. Остальное открывается шагами — так посетитель сам
- * решает, где задержаться, и это ровно то, чего не даёт ролик.
- *
- * Порядок: вход, затем главы по хронологии — подлёт, прибытие и виды зоны, —
- * следом ветка своих проектов и вершина.
- */
+/** Все ракурсы в порядке осмотра — остановки, по которым идут шагом. */
 export function stations(): FlightPoint[] {
   const first = routeStops()[0];
 
-  /*
-   * Вход — такие же станции, как остальные: посетитель стоит у благодати под
-   * Древом и дальше идёт сам. Автоматического пролёта нет — путь по карьере
-   * проходят, а не смотрят.
-   *
-   * Последние две точки входа принадлежат первой главе: это её подлёт и
-   * прибытие, поэтому и подписаны ею.
-   */
-  const entry: FlightPoint[] = entryPath.map((shot, index) => {
-    const ofFirstChapter = index >= entryPath.length - 2;
-
-    return {
-      label: ofFirstChapter && first ? first.positionId : 'вход',
-      shot,
-      positionId: ofFirstChapter ? first?.positionId : undefined,
-    };
-  });
+  const entry: FlightPoint[] = entryPath.map((shot, index) => ({
+    label: index >= entryPath.length - 2 && first ? first.positionId : 'вход',
+    shot,
+  }));
 
   const zones = routeStops().flatMap((stop, index) => {
     const zone = zoneOf(stop.positionId)!;
-    const label = stop.branch ? `${stop.positionId} · ветка` : stop.positionId;
+    const label = stop.branch ? `${stop.positionId}, ветка` : stop.positionId;
 
-    // У первой главы подлёт и прибытие уже пришли со входом — берём только виды.
     const path = index === 0 ? [] : pathOf(zone);
 
-    return [...path, ...zone.views].map((shot) => ({
-      label,
-      shot,
-      positionId: stop.positionId,
-    }));
+    return [...path, ...zone.views].map((shot) => ({ label, shot }));
   });
 
   const peak = [

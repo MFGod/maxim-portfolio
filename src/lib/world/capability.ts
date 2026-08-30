@@ -1,10 +1,4 @@
-/**
- * Может ли эта машина показать трёхмерный мир.
- *
- * Решение принимается до того, как загружен хоть один байт сцены: мир весит
- * 27 МБ, и платить ими за посетителя, которому мы всё равно покажем плоский
- * план, нельзя. Функция чистая — гейты проверяются тестом, без браузера.
- */
+/** Может ли эта машина показать трёхмерный мир. */
 
 export const WORLD_BLOCK_REASONS = [
   'ready',
@@ -25,13 +19,41 @@ export type WorldEnvironment = {
   webgl2: boolean;
   /** `navigator.deviceMemory` в гигабайтах, если браузер его сообщает. */
   deviceMemory: number | null;
+  /** Палец, а не мышь. Определяет уровень отрисовки, но не доступность мира. */
+  coarsePointer: boolean;
 };
 
-/** Ниже этой ширины мир не поднимаем: там своя оболочка и нет оконного менеджера. */
-export const WORLD_MIN_WIDTH = 1024;
+/** Ниже этой ширины мир не поднимаем. */
+export const WORLD_MIN_WIDTH = 320;
 
 /** Меньше этого объёма памяти сцена не переживёт: 27 МБ геометрии плюс текстуры. */
 export const WORLD_MIN_MEMORY_GB = 4;
+
+/** Уровень отрисовки. */
+export type WorldQuality = 'full' | 'light';
+
+/** Ширина, ниже которой отрисовка идёт по облегчённому уровню. */
+export const WORLD_LIGHT_WIDTH = 1024;
+
+/**
+ * Уровень отрисовки по машине. Отдельно от `worldSupport`: тот отвечает
+ * «показывать ли вообще», этот — «чем платить за кадр».
+ */
+export function worldQuality(environment: WorldEnvironment): WorldQuality {
+  if (environment.deviceMemory !== null && environment.deviceMemory <= 4) {
+    return 'light';
+  }
+
+  if (
+    environment.coarsePointer &&
+    environment.viewportWidth !== null &&
+    environment.viewportWidth < WORLD_LIGHT_WIDTH
+  ) {
+    return 'light';
+  }
+
+  return 'full';
+}
 
 /**
  * Порядок проверок — от самого дешёвого и самого частого к редкому, чтобы
@@ -68,7 +90,6 @@ export function detectWebgl2(): boolean {
     const gl = canvas.getContext('webgl2');
     if (!gl) return false;
 
-    // Контекстов WebGL у браузера конечное число: пробный обязан их вернуть.
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     return true;
   } catch {

@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { applications } from '@/data/applications';
+import { windowMeta } from '@/data/applications';
 import { applyRect, useWindowGesture } from '@/hooks/use-window-gesture';
 import { cn } from '@/lib/cn';
 import { useSetting } from '@/lib/settings';
@@ -54,7 +54,7 @@ export function WindowFrame({ instance, title, subtitle, children }: Props) {
   const animate = windowAnimations && animationLevel !== 'off' && !systemReduceMotion;
   const duration = animationLevel === 'reduced' ? 0.12 : 0.2;
 
-  const isGlass = applications[instance.app].chrome === 'glass';
+  const isGlass = windowMeta(instance.app).chrome === 'glass';
   const isFocused = state.focusedId === instance.id;
   const isMaximized = instance.status === 'maximized';
   const isMinimized = instance.status === 'minimized';
@@ -77,9 +77,6 @@ export function WindowFrame({ instance, title, subtitle, children }: Props) {
     if (nodeRef.current) applyRect(nodeRef.current, instance.rect);
   }, [instance.rect]);
 
-  // Открытое окно забирает фокус себе. Иначе фокус остаётся на ярлыке или
-  // кнопке дока, которыми окно открыли, и первое нажатие клавиши — тот же
-  // `Esc` — подсвечивает их кольцом фокуса уже на пустом столе.
   const takesFocusOnMount = useRef(
     instance.status !== 'minimized' && state.focusedId === instance.id,
   );

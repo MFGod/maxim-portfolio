@@ -49,7 +49,7 @@ export function SkillsApp() {
   const selected = selectedId ? techNodeById.get(selectedId) : null;
 
   return (
-    <div className="@container relative flex h-full min-h-0 flex-col">
+    <div className="@container relative flex h-full min-h-0 scrollbar-thin flex-col overflow-y-auto @md:overflow-hidden">
       <div className="relative h-[52vh] min-h-64 shrink-0 @md:h-full @md:min-h-0 @md:flex-1">
         <TechGraph
           selectedId={selectedId}

@@ -300,21 +300,24 @@ export const ru = deepFreeze({
   'world.controls.orbit': 'Орбита',
   'world.controls.fps': 'От первого лица',
   'world.controls.skip': 'Пропустить',
+  'world.stick.label': 'Ход по миру',
   'world.steps.label': 'Шаги по миру',
   'world.steps.back': 'Назад',
   'world.steps.next': 'Дальше',
   'world.steps.hint': 'Перетащите, чтобы осмотреться с места',
-  'world.steps.toPath': 'На путь',
-  'world.quality.label': 'Затенение',
-  'world.quality.occlusionOn': 'Мягкое',
-  'world.quality.occlusionOff': 'Простое',
-  'world.quality.hint':
-    'Мягкое добавляет тень в углах и складках. На слабой машине его стоит выключить: это самая дорогая часть кадра.',
+  'world.sound.label': 'Звук',
+  'world.sound.silence': 'Тишина',
+  'world.sound.credit': 'Музыка:',
+  'world.sound.volume': 'Громкость',
   'world.menu.label': 'Меню',
+  'world.menu.tabWorld': 'Мир',
+  'world.menu.tabSettings': 'Настройки',
   'world.menu.guide': 'Как здесь всё устроено',
   'world.book.label': 'Книга-резюме',
   'world.book.open': 'Открыть резюме',
   'world.book.close': 'Убрать книгу',
+  'world.book.closeShort': 'Убрать',
+  'world.book.closePrint': 'закрыть',
   'world.book.previous': 'Предыдущий разворот',
   'world.book.next': 'Следующий разворот',
   'world.book.position': 'Разворот',
@@ -323,17 +326,15 @@ export const ru = deepFreeze({
   'world.book.guide.book.1':
     'Щелчок по правой странице листает вперёд, а по левой возвращает назад.',
   'world.book.guide.book.2':
-    'На этом развороте щелчок по левой странице закрывает книгу.',
+    'Убрать книгу можно с любой страницы: «закрыть» в правом верхнем углу, щелчок по корешку, полоса под разворотом или клавиша Esc.',
   'world.book.guide.book.3':
-    'Закладка со знаком вопроса возвращает сюда с любой страницы.',
-  'world.book.guide.book.4':
     'Закрытый том можно повертеть протяжкой, а с зажатым Shift переставить в кадре.',
-  'world.book.guide.book.5':
+  'world.book.guide.book.4':
     'Подчёркнутая строка ведёт по ссылке: щелчок открывает её в новой вкладке.',
   'world.book.guide.world.title': 'Мир',
   'world.book.guide.world.1':
     'Полоса внизу ведёт по местам работы: «Назад» и «Дальше».',
-  'world.book.guide.world.2': 'Протяжка по миру осматривается с места.',
+  'world.book.guide.world.2': 'Протяжка по миру поворачивает взгляд, не сходя с места.',
   'world.book.guide.world.3':
     'В орбите камера ходит вокруг точки, от первого лица работают WASD или стрелки.',
   'world.book.guide.world.4': 'Колесо приближает и отдаляет.',

@@ -295,21 +295,24 @@ export const en: Dictionary = deepFreeze({
   'world.controls.orbit': 'Orbit',
   'world.controls.fps': 'First person',
   'world.controls.skip': 'Skip',
+  'world.stick.label': 'Move through the world',
   'world.steps.label': 'World stops',
   'world.steps.back': 'Back',
   'world.steps.next': 'Next',
   'world.steps.hint': 'Drag to look around from here',
-  'world.steps.toPath': 'Back to the path',
-  'world.quality.label': 'Occlusion',
-  'world.quality.occlusionOn': 'Soft',
-  'world.quality.occlusionOff': 'Plain',
-  'world.quality.hint':
-    'Soft adds shading in corners and folds. On a slow machine turn it off: it is the most expensive part of the frame.',
+  'world.sound.label': 'Sound',
+  'world.sound.silence': 'Silence',
+  'world.sound.credit': 'Music:',
+  'world.sound.volume': 'Volume',
   'world.menu.label': 'Menu',
+  'world.menu.tabWorld': 'World',
+  'world.menu.tabSettings': 'Settings',
   'world.menu.guide': 'How this works',
   'world.book.label': 'Resume book',
   'world.book.open': 'Open the resume',
   'world.book.close': 'Put the book away',
+  'world.book.closeShort': 'Put away',
+  'world.book.closePrint': 'close',
   'world.book.previous': 'Previous spread',
   'world.book.next': 'Next spread',
   'world.book.position': 'Spread',
@@ -317,21 +320,21 @@ export const en: Dictionary = deepFreeze({
   'world.book.guide.book.title': 'The book',
   'world.book.guide.book.1':
     'A click on the right page turns forward, a click on the left one turns back.',
-  'world.book.guide.book.2': 'On this spread a click on the left page closes the book.',
+  'world.book.guide.book.2':
+    'The book closes from any page: “close” in the top right corner, a click on the spine, the bar below the spread, or Esc.',
   'world.book.guide.book.3':
-    'The question-mark ribbon brings you back here from any page.',
-  'world.book.guide.book.4':
     'The closed volume spins with a drag; hold Shift to move it around the frame.',
-  'world.book.guide.book.5':
+  'world.book.guide.book.4':
     'An underlined line is a link: a click opens it in a new tab.',
   'world.book.guide.world.title': 'The world',
   'world.book.guide.world.1': 'The bar below walks the workplaces: "Back" and "Next".',
-  'world.book.guide.world.2': 'Dragging the world looks around from where you stand.',
+  'world.book.guide.world.2':
+    'Dragging the world turns your head without leaving the spot.',
   'world.book.guide.world.3':
     'Orbit circles a point; first person is WASD or the arrow keys.',
   'world.book.guide.world.4': 'The wheel moves closer and further away.',
   'world.screen.title': 'Career map',
   'world.screen.subtitle':
     'Workplaces as points, projects beside them, an unclimbed peak ahead.',
-  'world.screen.back': 'Back to desktop',
+  'world.screen.back': 'To the desktop',
 });
