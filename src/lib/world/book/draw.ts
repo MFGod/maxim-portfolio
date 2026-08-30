@@ -1,22 +1,4 @@
-/**
- * Отрисовка одной страницы книги на двумерном холсте.
- *
- * Вынесено из пула намеренно: пул отвечает за жизнь текстуры в видеопамяти,
- * этот файл — за буквы. Само содержимое сюда приходит блоками из `content.ts`
- * (D8: холст и скрытая разметка обязаны идти из одного места, иначе разъедутся)
- * — здесь остаются только кегли, цвета и отступы.
- *
- * Палитра плоская и не случайно. В мире нет ни одной текстуры: 107 GLB-файлов,
- * 148 материалов, всё на `baseColorFactor` и цвете вершин. Фотографическая
- * бумага с зерном и мягкими тенями рядом с тремя миллионами плоскозакрашенных
- * треугольников читалась бы вставкой из другого проекта. Поэтому заливки
- * плоские, а затенение у корешка — ступенькой, а не градиентом.
- *
- * Цвета подобраны под пайплайн, а не «на глаз». `OutputPass` применяет
- * экспозицию 1.16 ко всему кадру, а `UnrealBloomPass` ловит всё ярче единицы.
- * Бумага `#E6DFCE` при `emissiveIntensity` 0.85 садится около 0.73 по яркости —
- * читается белой и остаётся под порогом свечения. Чистый белый полыхал бы.
- */
+/** Отрисовка одной страницы книги на двумерном холсте. */
 
 import type { Translate } from '@/lib/i18n';
 
@@ -25,6 +7,7 @@ import {
   type ListRole,
   type PageBlock,
   type PageFace,
+  type PageSide,
   type TextRole,
 } from './content';
 
@@ -60,16 +43,7 @@ const DISPLAY = '"Cormorant Garamond", Georgia, serif';
 const BODY = '"Inter", system-ui, sans-serif';
 const MONO = '"JetBrains Mono", ui-monospace, monospace';
 
-/**
- * Шрифты, без которых страницу рисовать нельзя.
- *
- * Холст не ждёт загрузки веб-шрифта: если тот ещё не готов, текст молча
- * ложится запасным начертанием и остаётся таким до перерисовки. Поэтому
- * отрисовка обязана дождаться этих обещаний.
- *
- * Имена простые, без хешей: `next/font` регистрирует семейства как `Inter`,
- * `Cormorant Garamond` и `JetBrains Mono` — проверено в браузере.
- */
+/** Шрифты, без которых страницу рисовать нельзя. */
 const REQUIRED_FONTS = [
   `400 38px ${BODY}`,
   `600 38px ${BODY}`,
@@ -84,13 +58,9 @@ export async function fontsReady(): Promise<void> {
   await Promise.all(REQUIRED_FONTS.map((font) => document.fonts.load(font)));
 }
 
-/**
- * Место ссылки на странице, в пикселях холста.
- *
- * Считается по факту укладки строк, а не задаётся заранее: строка переносится
- * по ширине полосы, и где она кончится, до отрисовки не знает никто.
- */
-export type PageHotspot = {
+/** Место мишени на странице, в пикселях холста. */
+export type LinkHotspot = {
+  kind: 'link';
   x: number;
   y: number;
   width: number;
@@ -98,6 +68,17 @@ export type PageHotspot = {
   href: string;
   label: string;
 };
+
+export type CloseHotspot = {
+  kind: 'close';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+};
+
+export type PageHotspot = LinkHotspot | CloseHotspot;
 
 type Cursor = { x: number; y: number; width: number };
 
@@ -108,7 +89,10 @@ const FOOTER = 132;
 type Rule = { width: 'full' | 'short'; offset: number };
 
 type TextStyle = {
-  font: string;
+  /** Кегль до подгонки под разворот. */
+  size: number;
+  weight: number;
+  family: string;
   color: string;
   /** Межстрочное расстояние. */
   lead: number;
@@ -118,59 +102,74 @@ type TextStyle = {
   rule?: Rule;
 };
 
-/**
- * Типографика по ролям.
- *
- * Таблицей, а не ветвями в рисовании: так видно всю страницу разом — какие
- * кегли соседствуют и где кончается воздух, — и правка кегля не требует читать
- * логику. Числа взяты те же, что были в ветвях до выноса содержимого.
- */
+/** Типографика по ролям. */
 const TEXT: Record<TextRole, TextStyle> = {
-  name: { font: `600 64px ${DISPLAY}`, color: INK, lead: 74, after: 18 },
+  name: { size: 74, weight: 600, family: DISPLAY, color: INK, lead: 85, after: 21 },
   role: {
-    font: `400 34px ${BODY}`,
+    size: 39,
+    weight: 400,
+    family: BODY,
     color: INK_MUTED,
-    lead: 48,
-    rule: { width: 'short', offset: 30 },
-    after: 92,
+    lead: 55,
+    rule: { width: 'short', offset: 34 },
+    after: 106,
   },
-  place: { font: `400 27px ${MONO}`, color: INK_MUTED, lead: 42 },
+  place: { size: 31, weight: 400, family: MONO, color: INK_MUTED, lead: 48 },
   coverTitle: {
-    font: `600 104px ${DISPLAY}`,
+    size: 118,
+    weight: 600,
+    family: DISPLAY,
     color: INK,
-    lead: 112,
-    rule: { width: 'full', offset: 24 },
-    after: 84,
+    lead: 129,
+    rule: { width: 'full', offset: 28 },
+    after: 97,
   },
-  coverBlurb: { font: `400 36px ${BODY}`, color: INK_MUTED, lead: 42 },
+  coverBlurb: { size: 41, weight: 400, family: BODY, color: INK_MUTED, lead: 48 },
   chapterTitle: {
-    font: `600 72px ${DISPLAY}`,
+    size: 82,
+    weight: 600,
+    family: DISPLAY,
     color: INK,
-    lead: 76,
-    rule: { width: 'full', offset: 14 },
-    after: 46,
+    lead: 87,
+    rule: { width: 'full', offset: 16 },
+    after: 53,
   },
   sectionTitle: {
-    font: `600 60px ${DISPLAY}`,
+    size: 69,
+    weight: 600,
+    family: DISPLAY,
     color: INK,
-    lead: 64,
-    rule: { width: 'full', offset: 14 },
-    after: 46,
+    lead: 74,
+    rule: { width: 'full', offset: 16 },
+    after: 53,
   },
-  position: { font: `600 38px ${BODY}`, color: ACCENT, lead: 52 },
-  period: { font: `400 32px ${MONO}`, color: INK_MUTED, lead: 48, before: 20 },
-  summary: { font: `400 38px ${BODY}`, color: INK, lead: 54, after: 46 },
-  tagline: { font: `400 36px ${BODY}`, color: INK_MUTED, lead: 50, after: 34 },
-  // Задача и решение стояли на 40 и 44 — разница в четыре пикселя на полосе в
-  // полторы тысячи не читается, а два числа вместо одного пришлось бы держать
-  // в голове.
-  paragraph: { font: `400 36px ${BODY}`, color: INK, lead: 52, after: 42 },
-  stack: { font: `400 30px ${MONO}`, color: ACCENT, lead: 46 },
-  label: { font: `400 30px ${MONO}`, color: RULE, lead: 48, after: 12 },
+  position: { size: 44, weight: 600, family: BODY, color: ACCENT, lead: 60 },
+  period: {
+    size: 37,
+    weight: 400,
+    family: MONO,
+    color: INK_MUTED,
+    lead: 55,
+    before: 23,
+  },
+  summary: { size: 44, weight: 400, family: BODY, color: INK, lead: 62, after: 53 },
+  tagline: {
+    size: 41,
+    weight: 400,
+    family: BODY,
+    color: INK_MUTED,
+    lead: 58,
+    after: 39,
+  },
+  paragraph: { size: 41, weight: 400, family: BODY, color: INK, lead: 60, after: 48 },
+  stack: { size: 34, weight: 400, family: MONO, color: ACCENT, lead: 53 },
+  label: { size: 34, weight: 400, family: MONO, color: RULE, lead: 55, after: 14 },
 };
 
 type ListStyle = {
-  font: string;
+  size: number;
+  weight: number;
+  family: string;
   color: string;
   lead: number;
   /** Воздух между пунктами. У оглавления его нет: это перечень, а не текст. */
@@ -178,60 +177,74 @@ type ListStyle = {
 };
 
 const LIST: Record<ListRole, ListStyle> = {
-  guide: { font: `400 34px ${BODY}`, color: INK_MUTED, lead: 48, gap: 8 },
-  points: { font: `400 34px ${BODY}`, color: INK_MUTED, lead: 48, gap: 8 },
-  index: { font: `400 36px ${BODY}`, color: INK, lead: 50, gap: 0 },
+  guide: { size: 39, weight: 400, family: BODY, color: INK_MUTED, lead: 55, gap: 9 },
+  points: { size: 39, weight: 400, family: BODY, color: INK_MUTED, lead: 55, gap: 9 },
+  index: { size: 41, weight: 400, family: BODY, color: INK, lead: 58, gap: 0 },
 };
 
 /** Отступ маркера от края полосы: тире плюс пробел. */
-const BULLET_INDENT = 34;
+const BULLET_INDENT = 39;
 
 /** Второй и следующий списки подряд отбиваются от предыдущего. */
-const LIST_TO_LIST = 22;
+const LIST_TO_LIST = 25;
 
 const LINK = {
-  font: `400 34px ${BODY}`,
+  size: 39,
+  weight: 400,
+  family: BODY,
   color: ACCENT,
-  lead: 48,
-  before: 34,
-  gap: 10,
+  lead: 55,
+  before: 39,
+  gap: 12,
   /** Насколько подчёркивание опущено под базовую линию. */
-  underline: 10,
-  /**
-   * Запас мишени сверху и снизу.
-   *
-   * Ссылку берут лучом по странице, стоящей под углом в трёх метрах от глаза, —
-   * строка высотой 34 пикселя занимает в кадре считаные пиксели. Запас делает
-   * мишень выше строки, не сдвигая саму строку.
-   */
-  padding: 12,
+  underline: 12,
+  /** Запас мишени сверху и снизу. */
+  padding: 14,
 } as const;
+
+/** Толщина черты и подчёркивания. Считается от кегля, чтобы не тончать. */
+const STROKE = 2;
 
 /** Откуда начинается полоса набора. Титульные страницы опущены ниже. */
 const TOP = 200;
 const COVER_TOP = { left: 380, right: 360 } as const;
 
+/** Ниже какой доли кегля страницу не ужимать. */
+const MIN_FIT = 0.66;
+
 /**
- * Разбивает текст по ширине и рисует, возвращая новую высоту курсора.
- *
- * Ниже полосы набора не пишет: страница фиксированного размера, и строка,
- * ушедшая за край холста, пропадает молча — а так текст просто обрывается там,
- * где кончилось место, и это видно.
+ * Состояние отрисовки: куда пишем, докуда можно, каким кеглем и пишем ли
+ * вообще.
  */
+type Layout = {
+  context: CanvasRenderingContext2D;
+  /** Ниже этой линии полоса кончается. При замере — бесконечность. */
+  bottom: number;
+  /** Во сколько раз кегль ужат под разворот. */
+  fit: number;
+  dry: boolean;
+};
+
+/** Шорткат `font` из разложенного начертания и подогнанного кегля. */
+function font(style: { weight: number; size: number; family: string }, fit: number) {
+  return `${style.weight} ${style.size * fit}px ${style.family}`;
+}
+
+/** Разбивает текст по ширине и укладывает, возвращая новую высоту курсора. */
 function paragraph(
-  context: CanvasRenderingContext2D,
+  layout: Layout,
   text: string,
   cursor: Cursor,
   lineHeight: number,
 ): number {
-  const bottom = context.canvas.height - FOOTER;
+  const { context } = layout;
   const words = text.split(' ');
   let line = '';
   let y = cursor.y;
 
   const flush = () => {
-    if (y > bottom) return false;
-    context.fillText(line, cursor.x, y);
+    if (y > layout.bottom) return false;
+    if (!layout.dry) context.fillText(line, cursor.x, y);
     y += lineHeight;
     return true;
   };
@@ -253,95 +266,164 @@ function paragraph(
 
 /** Маркированный список. Маркер — тире: точка на плоской бумаге теряется. */
 function bullets(
-  context: CanvasRenderingContext2D,
+  layout: Layout,
   items: readonly string[],
   cursor: Cursor,
   style: ListStyle,
 ): number {
+  const { context, fit } = layout;
+  const indent = BULLET_INDENT * fit;
+  const lead = style.lead * fit;
   let y = cursor.y;
 
-  context.font = style.font;
+  context.font = font(style, fit);
 
   for (const item of items) {
-    context.fillStyle = ACCENT;
-    context.fillText('—', cursor.x, y);
-    context.fillStyle = style.color;
+    if (!layout.dry) {
+      context.fillStyle = ACCENT;
+      context.fillText('—', cursor.x, y);
+      context.fillStyle = style.color;
+    }
+
     y = paragraph(
-      context,
+      layout,
       item,
-      { x: cursor.x + BULLET_INDENT, y, width: cursor.width - BULLET_INDENT },
-      style.lead,
+      { x: cursor.x + indent, y, width: cursor.width - indent },
+      lead,
     );
-    y += style.gap;
+    y += style.gap * fit;
   }
 
   return y;
 }
 
 /** Строка текста со своей ролью. Возвращает высоту курсора после неё. */
-function line(
-  context: CanvasRenderingContext2D,
-  text: string,
-  cursor: Cursor,
-  style: TextStyle,
-): number {
-  const top = cursor.y + (style.before ?? 0);
+function line(layout: Layout, text: string, cursor: Cursor, style: TextStyle): number {
+  const { context, fit } = layout;
+  const top = cursor.y + (style.before ?? 0) * fit;
 
-  context.font = style.font;
-  context.fillStyle = style.color;
-  const y = paragraph(context, text, { ...cursor, y: top }, style.lead);
+  context.font = font(style, fit);
+  if (!layout.dry) context.fillStyle = style.color;
+
+  const y = paragraph(layout, text, { ...cursor, y: top }, style.lead * fit);
 
   if (style.rule) {
-    context.fillStyle = RULE;
     const width = style.rule.width === 'full' ? cursor.width : cursor.width * 0.4;
-    context.fillRect(cursor.x, y + style.rule.offset, width, 2);
+    if (!layout.dry) {
+      context.fillStyle = RULE;
+      context.fillRect(cursor.x, y + style.rule.offset * fit, width, STROKE);
+    }
   }
 
-  return y + (style.after ?? 0);
+  return y + (style.after ?? 0) * fit;
 }
 
-/**
- * Ссылки строкой на строку. Возвращает высоту курсора и места мишеней.
- *
- * Подчёркивание рисуется, а не имитируется цветом: ссылка на бумажной странице
- * ничем другим от текста не отличается, а цвет акцента здесь носят ещё стек и
- * маркеры списка.
- */
+/** Ссылки строкой на строку. Возвращает высоту курсора и места мишеней. */
 function links(
-  context: CanvasRenderingContext2D,
+  layout: Layout,
   items: readonly { label: string; href: string }[],
   cursor: Cursor,
   found: PageHotspot[],
 ): number {
-  let y = cursor.y + LINK.before;
+  const { context, fit } = layout;
+  const lead = LINK.lead * fit;
+  const padding = LINK.padding * fit;
+  let y = cursor.y + LINK.before * fit;
 
-  context.font = LINK.font;
-  context.fillStyle = LINK.color;
+  context.font = font(LINK, fit);
+  if (!layout.dry) context.fillStyle = LINK.color;
 
   for (const item of items) {
     const width = Math.min(context.measureText(item.label).width, cursor.width);
 
-    context.fillText(item.label, cursor.x, y);
-    context.fillRect(cursor.x, y + LINK.underline, width, 2);
+    if (!layout.dry) {
+      context.fillText(item.label, cursor.x, y);
+      context.fillRect(cursor.x, y + LINK.underline * fit, width, STROKE);
 
-    found.push({
-      x: cursor.x,
-      y: y - LINK.lead + LINK.padding,
-      width,
-      height: LINK.lead + LINK.padding,
-      href: item.href,
-      label: item.label,
-    });
+      found.push({
+        kind: 'link',
+        x: cursor.x,
+        y: y - lead + padding,
+        width,
+        height: lead + padding,
+        href: item.href,
+        label: item.label,
+      });
+    }
 
-    y += LINK.lead + LINK.gap;
+    y += lead + LINK.gap * fit;
   }
 
   return y;
 }
 
+/** Укладывает блоки сверху вниз, собирая по дороге места ссылок. */
+function blocks(
+  layout: Layout,
+  page: readonly PageBlock[],
+  cursor: Cursor,
+  hotspots: PageHotspot[],
+): number {
+  let y = cursor.y;
+  let previous: PageBlock | null = null;
+
+  for (const block of page) {
+    if (block.kind === 'list' && previous?.kind === 'list')
+      y += LIST_TO_LIST * layout.fit;
+
+    if (block.kind === 'text') {
+      y = line(layout, block.text, { ...cursor, y }, TEXT[block.role]);
+    } else if (block.kind === 'list') {
+      y = bullets(layout, block.items, { ...cursor, y }, LIST[block.role]);
+    } else {
+      y = links(layout, block.items, { ...cursor, y }, hotspots);
+    }
+
+    previous = block;
+  }
+
+  return y;
+}
+
+/** Полоса набора одной стороны: откуда начинается и сколько её всего. */
+type Column = { top: number; height: number };
+
+/** Во сколько раз ужать кегль, чтобы разворот поместился целиком. */
+function fitFor(
+  context: CanvasRenderingContext2D,
+  sides: readonly { page: readonly PageBlock[]; column: Column }[],
+  width: number,
+): number {
+  let fit = 1;
+
+  for (let pass = 0; pass < 2; pass++) {
+    let tightest = 1;
+
+    for (const side of sides) {
+      const layout: Layout = { context, bottom: Infinity, fit, dry: true };
+      const used =
+        blocks(layout, side.page, { x: 0, y: side.column.top, width }, []) -
+        side.column.top;
+
+      if (used > side.column.height) {
+        tightest = Math.min(tightest, side.column.height / used);
+      }
+    }
+
+    if (tightest >= 1) break;
+    fit = Math.max(fit * tightest, MIN_FIT);
+  }
+
+  return fit;
+}
+
+/** Откуда начинается полоса набора на этой стороне. */
+function columnTop(face: PageFace): number {
+  return face.spread.kind === 'cover' ? COVER_TOP[face.side] : TOP;
+}
+
 /**
  * Рисует страницу целиком: бумагу, затенение у корешка и содержимое.
- *
  * @param context холст размером `PAGE_WIDTH_PX` на `PAGE_HEIGHT_PX`
  * @param face какой разворот и какая его сторона
  * @param number номер страницы для колонтитула
@@ -359,10 +441,6 @@ export function drawPage(
   context.fillStyle = PAPER;
   context.fillRect(0, 0, width, height);
 
-  // Ступенька у корешка вместо градиента: в мире плоских заливок мягкая тень
-  // выглядит чужой. Объём странице даёт форма — провал бумаги к корешку и
-  // торец блока: экранного затенения книге больше не достаётся, она рисуется
-  // своим проходом после `GTAOPass`.
   context.fillStyle = 'rgba(0, 0, 0, 0.05)';
   if (face.side === 'left')
     context.fillRect(width - SPINE_SHADE, 0, SPINE_SHADE, height);
@@ -370,13 +448,40 @@ export function drawPage(
 
   const left = face.side === 'left' ? MARGIN : SPINE_MARGIN;
   const right = face.side === 'left' ? SPINE_MARGIN : MARGIN;
-  const top = face.spread.kind === 'cover' ? COVER_TOP[face.side] : TOP;
-  const cursor: Cursor = { x: left, y: top, width: width - left - right };
+  const column: Column = {
+    top: columnTop(face),
+    height: height - FOOTER - columnTop(face),
+  };
+  const cursor: Cursor = { x: left, y: column.top, width: width - left - right };
 
   context.textBaseline = 'alphabetic';
-  const hotspots = drawBlocks(context, pageContent(face, t), cursor);
 
-  context.font = `400 27px ${MONO}`;
+  const other: PageSide = face.side === 'left' ? 'right' : 'left';
+  const otherFace: PageFace = { spread: face.spread, side: other };
+  const fit = fitFor(
+    context,
+    [
+      { page: pageContent(face, t), column },
+      {
+        page: pageContent(otherFace, t),
+        column: {
+          top: columnTop(otherFace),
+          height: height - FOOTER - columnTop(otherFace),
+        },
+      },
+    ],
+    cursor.width,
+  );
+
+  const hotspots: PageHotspot[] = [];
+  blocks(
+    { context, bottom: height - FOOTER, fit, dry: false },
+    pageContent(face, t),
+    cursor,
+    hotspots,
+  );
+
+  context.font = `400 31px ${MONO}`;
   context.fillStyle = RULE;
   context.textAlign = face.side === 'left' ? 'left' : 'right';
   context.fillText(
@@ -386,32 +491,45 @@ export function drawPage(
   );
   context.textAlign = 'left';
 
+  const closing = closeMark(context, face, t);
+  if (closing) hotspots.push(closing);
+
   return hotspots;
 }
 
-/** Укладывает блоки сверху вниз, собирая по дороге места ссылок. */
-function drawBlocks(
+/** Печатное «закрыть» в правом верхнем углу разворота. */
+function closeMark(
   context: CanvasRenderingContext2D,
-  blocks: readonly PageBlock[],
-  cursor: Cursor,
-): PageHotspot[] {
-  const hotspots: PageHotspot[] = [];
-  let y = cursor.y;
-  let previous: PageBlock | null = null;
+  face: PageFace,
+  t: Translate,
+): CloseHotspot | null {
+  if (face.side !== 'right') return null;
 
-  for (const block of blocks) {
-    if (block.kind === 'list' && previous?.kind === 'list') y += LIST_TO_LIST;
+  const { width } = context.canvas;
+  const label = t('world.book.closePrint');
+  const right = width - MARGIN;
 
-    if (block.kind === 'text') {
-      y = line(context, block.text, { ...cursor, y }, TEXT[block.role]);
-    } else if (block.kind === 'list') {
-      y = bullets(context, block.items, { ...cursor, y }, LIST[block.role]);
-    } else {
-      y = links(context, block.items, { ...cursor, y }, hotspots);
-    }
+  context.font = `400 31px ${MONO}`;
+  context.fillStyle = INK_MUTED;
+  context.textAlign = 'right';
+  context.fillText(label, right, CLOSE_BASELINE);
+  context.textAlign = 'left';
 
-    previous = block;
-  }
+  const text = context.measureText(label).width;
+  const pad = CLOSE_PAD;
 
-  return hotspots;
+  return {
+    kind: 'close',
+    x: right - text - pad,
+    y: CLOSE_BASELINE - 31 - pad,
+    width: text + pad * 2,
+    height: 31 + pad * 2,
+    label,
+  };
 }
+
+/** Базовая линия печатного «закрыть», пиксели холста страницы. */
+const CLOSE_BASELINE = 116;
+
+/** Запас мишени вокруг печатного «закрыть», пиксели холста страницы. */
+const CLOSE_PAD = 46;

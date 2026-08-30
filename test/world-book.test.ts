@@ -123,9 +123,6 @@ describe('раскладка разворотов по граням', () => {
   });
 
   it('вне переворота направление ни на что не влияет', () => {
-    // Направление хранит прошлый переворот и после него не сбрасывается: если
-    // читать его без оглядки на `turning`, левая страница уедет на разворот
-    // назад — с чужим текстом на виду.
     const faces = spreadFaces({ spread: SPREAD, turning: false, direction: -1 });
 
     expect(faces.left).toBe(SPREAD);
@@ -168,8 +165,6 @@ describe('углы половин при раскрытии', () => {
   });
 
   it('у раскрытой книги обе половины подняты к зрителю на наклон', () => {
-    // Знаки разные: половины расходятся от корешка домиком, а не заваливаются
-    // обе в одну сторону.
     const angles = wingAngles(1, OPEN_TILT);
 
     expect(angles.left).toBeCloseTo(OPEN_TILT, 10);
@@ -201,9 +196,6 @@ describe('развёртка обложки', () => {
   });
 
   it('корешок на картинке той же доли, что и в геометрии переплёта', () => {
-    // Главный сторож обложки. Панели режутся по пикселям, толщина книги растёт
-    // из `metrics.ts`, и разъехаться им нельзя: рисунок поедет по граням.
-    // Подменят текстуру с другими долями — упадёт здесь, а не на стенде.
     const { spine, front } = COVER_ATLAS;
 
     const onPicture = (spine.u1 - spine.u0) / (front.u1 - front.u0);
@@ -236,16 +228,12 @@ describe('раскладка развёртки по граням коробки
 
     mapFaceToPanel(box, OUTER, COVER_ATLAS.front);
 
-    // Сравнение приблизительное: UV лежат в `Float32`, а доли считаны в
-    // двойной точности — совпадения до последнего знака тут не бывает.
     const us = faceUv(box, OUTER);
     expect(Math.min(...us)).toBeCloseTo(COVER_ATLAS.front.u0, 6);
     expect(Math.max(...us)).toBeCloseTo(COVER_ATLAS.front.u1, 6);
   });
 
   it('остальные грани остаются нетронутыми', () => {
-    // Здесь ошибка стоит дорого и не видна на кадре: обложка отпечаталась бы
-    // на торцах переплёта, а на них смотрят с ребра.
     const box = new THREE.BoxGeometry(1, 1, 1);
 
     mapFaceToPanel(box, OUTER, COVER_ATLAS.front);
@@ -283,8 +271,6 @@ describe('насечка листов на торце блока', () => {
   };
 
   it('разворот меняет координаты грани местами', () => {
-    // Насечка нарисована вдоль горизонтали холста. На головке и хвосте стопка
-    // идёт по вертикали разметки, и без мены листы легли бы поперёк неё.
     const box = new THREE.BoxGeometry(1, 1, 1);
     const before = facePairs(box, HEAD);
 
@@ -294,8 +280,6 @@ describe('насечка листов на торце блока', () => {
   });
 
   it('разворот не трогает остальные грани', () => {
-    // Боковые обрезы разметка коробки устраивает как есть: у граней `±X`
-    // горизонталь уже идёт вдоль толщины блока.
     const box = new THREE.BoxGeometry(1, 1, 1);
     const untouched = new THREE.BoxGeometry(1, 1, 1);
 
@@ -324,7 +308,6 @@ describe('насечка листов на торце блока', () => {
   });
 
   it('середина стопки идёт без загустения', () => {
-    // Иначе кромочная тень расползлась бы на весь торец и съела насечку.
     for (const share of [0.2, 0.5, 0.8]) {
       expect(rimShade(share)).toBe(0);
     }
@@ -354,7 +337,6 @@ describe('кручение книги в руках', () => {
   });
 
   it('протяжка вбок не заваливает книгу вверх или вниз', () => {
-    // Оси экранные: вбок — рыскание вокруг вертикали, и только оно.
     const front = facing();
 
     front.applyQuaternion(spinStep(SPIN_TURN_PIXELS / 8, 0));
@@ -420,8 +402,6 @@ describe('перестановка книги в кадре', () => {
   const visibleHeight = 2 * DEPTH * Math.tan((FOV * Math.PI) / 180 / 2);
 
   it('протяжка во всю высоту кадра проносит книгу через весь кадр', () => {
-    // Книга обязана идти ровно за указателем, а не «примерно рядом»: цена
-    // пикселя считается из угла обзора, а не подбирается.
     const step = worldPerPixel(DEPTH, FOV, FRAME_PIXELS);
 
     expect(step * FRAME_PIXELS).toBeCloseTo(visibleHeight, 10);
@@ -435,8 +415,6 @@ describe('перестановка книги в кадре', () => {
   });
 
   it('кадр нулевой высоты не даёт деления на ноль', () => {
-    // Канвас приходит нулевым, пока вёрстка не посчитала высоту, — на этом
-    // месте мир уже однажды получал NaN в позицию камеры, и навсегда.
     expect(worldPerPixel(DEPTH, FOV, 0)).toBe(0);
   });
 
@@ -455,8 +433,6 @@ describe('перестановка книги в кадре', () => {
   });
 
   it('книга упирается в край кадра, отступив на свой радиус', () => {
-    // Утащить том за кадр нельзя: вернуть его оттуда нечем — кнопка открывает
-    // книгу, а не ищет её.
     const frame = { width: 1, height: 0.6 };
 
     const kept = keptInFrame({ x: 5, y: -5 }, frame, CLOSED_RADIUS);
@@ -468,11 +444,6 @@ describe('перестановка книги в кадре', () => {
   });
 
   it('радиус закрытой книги накрывает её дальний угол', () => {
-    /*
-     * Сторож зажима. Начало координат книги — у корешка, половины стоят по одну
-     * сторону от него, и «половина габарита» тут не работает: книга уже уезжала
-     * за верхний край кадра, потому что отступ считали от середины тома.
-     */
     const corner = Math.hypot(
       PAGE_W / 2 + COVER_W / 2,
       COVER_H / 2,
@@ -483,8 +454,6 @@ describe('перестановка книги в кадре', () => {
   });
 
   it('книга крупнее кадра прижимается к середине', () => {
-    // Вырожденный случай: без зажима предел вышел бы отрицательным, и книгу
-    // выбрасывало бы в противоположный угол.
     const kept = keptInFrame({ x: 2, y: 2 }, { width: 0.1, height: 0.1 }, 1);
 
     expect(kept).toEqual({ x: 0, y: 0 });
@@ -499,8 +468,6 @@ describe('поза корешка', () => {
   });
 
   it('у закрытой книги корешок приходит вплотную к краю крышек', () => {
-    // Крышка шире страницы на `COVER_MARGIN` и центрована по её середине,
-    // поэтому край переплёта уходит за корешок на половину припуска.
     const stand = spinePose(0);
 
     expect(stand.x + BOARD_T / 2).toBeCloseTo(-COVER_MARGIN / 2, 10);
@@ -513,8 +480,6 @@ describe('поза корешка', () => {
   });
 
   it('у раскрытой книги корешок уходит ниже крышек, а не вровень', () => {
-    // Вровень две плоскости на одной глубине дерутся за буфер глубины: дно
-    // жёлоба пошло бы полосами переплёта.
     const stand = spinePose(1);
 
     expect(stand.z + BOARD_T / 2).toBeLessThanOrEqual(-(BLOCK_T + BOARD_T));
@@ -587,27 +552,19 @@ describe('углы костей при перевороте', () => {
   });
 
   it('в конце переворота лист повёрнут ровно на пол-оборота', () => {
-    // Знак отрицательный: при положительном лист ныряет в −Z, внутрь
-    // переплёта, и весь переворот проходит скрытым за корпусом книги.
     expect(total(1)).toBeCloseTo(-Math.PI, 10);
   });
 
   it('выгиб меняет форму листа, но не общий угол', () => {
-    // Профиль выгиба симметричен и в сумме даёт ноль, поэтому на половине
-    // переворота — ровно половина оборота, несмотря на максимальный выгиб.
     expect(total(0.5)).toBeCloseTo(-Math.PI / 2, 10);
   });
 
   it('весь поворот несёт шарнир у корешка, остальные кости только выгибают', () => {
-    // Раздать поворот поровну нельзя: кости сдвинуты вдоль листа, и цепочка
-    // свернётся в дугу вместо того, чтобы лечь на вторую стопку.
     const curls = (progress: number) => flipRotations(progress, BONES).slice(1);
 
-    // На концах бумага плоская: гнуть её нечему.
     expect(curls(0).every((angle) => angle === 0)).toBe(true);
     expect(curls(1).every((angle) => Math.abs(angle) < 1e-12)).toBe(true);
 
-    // В середине — выгнута.
     expect(curls(0.5).some((angle) => Math.abs(angle) > 0.05)).toBe(true);
   });
 
@@ -622,7 +579,6 @@ describe('углы костей при перевороте', () => {
   });
 
   it('лист поднимается к зрителю, а не ныряет внутрь книги', () => {
-    // Свободный край на середине переворота обязан оказаться в +Z.
     for (const progress of [0.25, 0.5, 0.75]) {
       expect(total(progress)).toBeLessThan(0);
     }
@@ -639,11 +595,6 @@ describe('углы костей при перевороте', () => {
 });
 
 describe('листающийся лист', () => {
-  /*
-   * Лист собирается на боевых размерах из `metrics.ts`, а не на переписанных
-   * числах: переписанные пережили бы правку метрик молча и сторожили бы
-   * вчерашнюю книгу.
-   */
   const build = () => {
     const sheet = createSheet({
       width: PAGE_W,
@@ -661,10 +612,6 @@ describe('листающийся лист', () => {
   };
 
   it('в покое лист сохраняет свою ширину', () => {
-    // Сторожит позу привязки: если `Skeleton` собрать до того, как у костей
-    // посчитаны мировые матрицы, обратные матрицы выходят единичными и лист
-    // растягивается почти вдвое — 0.375 вместо 0.2. Глазами на статичном
-    // кадре это не видно: вне переворота лист скрыт.
     const sheet = build();
     sheet.setProgress(0);
     sheet.root.updateMatrixWorld(true);
@@ -683,7 +630,6 @@ describe('листающийся лист', () => {
       max = Math.max(max, point.x);
     }
 
-    // Бумага уже полной ширины на отступ от корешка — там жёлоб со швом.
     expect(max - min).toBeCloseTo(PAGE_W - PAGE_INSET, 4);
   });
 
@@ -702,8 +648,6 @@ describe('листающийся лист', () => {
         index++
       ) {
         sheet.front.getVertexPosition(index, point);
-        // Шарнир стоит в начале координат листа; дальше своей ширины (плюс
-        // половина высоты по вертикали) бумаге тянуться некуда.
         farthest = Math.max(farthest, Math.hypot(point.x, point.z));
       }
 
@@ -712,8 +656,6 @@ describe('листающийся лист', () => {
   });
 
   it('в конце переворота лист занимает ровно левую половину', () => {
-    // При равномерной раздаче поворота по цепочке лист сворачивался в трубку
-    // и застывал поперёк книги, торча на 0.12 юнита к зрителю.
     const sheet = build();
     const point = new THREE.Vector3();
 
@@ -734,16 +676,10 @@ describe('листающийся лист', () => {
     }
 
     expect(minX).toBeCloseTo(-PAGE_W, 3);
-    // Внутренний край не доходит до корешка ровно на отступ.
     expect(maxX).toBeCloseTo(-PAGE_INSET, 3);
   });
 
   it('на обеих стопках лист ложится в полосу лежащей страницы', () => {
-    // Главный сторож укладки. Лежащая страница провалена в жёлоб: от `PAPER_LIFT` у
-    // внешнего края до `PAPER_LIFT − GUTTER_DIP` у корешка. Плоский лист садился поверх
-    // неё, и в момент подмены разворота бумага проваливалась разом — конец
-    // переворота отдавал рывком. На обоих концах лист обязан лежать ровно в
-    // этой же полосе.
     const sheet = build();
     const point = new THREE.Vector3();
 
@@ -759,9 +695,6 @@ describe('листающийся лист', () => {
         index < requireAttribute(sheet.front.geometry, 'position').count;
         index++
       ) {
-        // Без `localToWorld`: узел листа наклонён вместе с половиной книги, и
-        // мировая высота включала бы этот наклон. Профиль бумаги меряем в
-        // плоскости самой половины — там он обязан совпасть с лежащей страницей.
         sheet.front.getVertexPosition(index, point);
         lowest = Math.min(lowest, point.z);
         highest = Math.max(highest, point.z);
@@ -772,10 +705,6 @@ describe('листающийся лист', () => {
 
     for (const progress of [0, 1]) {
       const { lowest, highest } = band(progress);
-      // Просвет постоянный и с той же стороны на обеих стопках: прибавлять его
-      // после множителя нельзя — поворот на −π обращает знак, и во второй
-      // половине переворота лист вдавливался бы в левую стопку.
-      // Нижняя точка — у внутреннего края бумаги, а он отступает от корешка.
       expect(lowest).toBeCloseTo(
         pageProfile(PAGE_INSET / PAGE_W, PAPER_LIFT, GUTTER_DIP) + SHEET_CLEARANCE,
         5,
@@ -796,12 +725,6 @@ describe('листающийся лист', () => {
   });
 
   it('лист ни на одной доле переворота не встаёт к зрителю ребром', () => {
-    /*
-     * Без выгиба лист остаётся плоской пластиной на шарнире и ровно на
-     * половине пути поворачивается к камере ребром. Плоскость нулевой толщины
-     * с ребра невидима — замер давал обращённость 0.00, и сквозь лист был
-     * виден мир за книгой. Выглядело это прозрачной страницей.
-     */
     const sheet = build();
     const near = new THREE.Vector3();
     const far = new THREE.Vector3();
@@ -811,8 +734,6 @@ describe('листающийся лист', () => {
       sheet.setProgress(step / 20);
       sheet.root.updateMatrixWorld(true);
 
-      // Верхний ряд вершин: наклон каждого отрезка в плоскости xz говорит,
-      // насколько этот кусок бумаги повёрнут к зрителю.
       let facing = 0;
       for (let index = 0; index + 1 < count / 2; index++) {
         sheet.front.getVertexPosition(index, near);
@@ -824,18 +745,11 @@ describe('листающийся лист', () => {
         facing = Math.max(facing, Math.abs(alongX / length));
       }
 
-      // Хоть какая-то часть листа обязана быть развёрнута к зрителю.
       expect(facing).toBeGreaterThan(0.5);
     }
   });
 
   it('лист занимает ровно ту же полосу бумаги, что и лежащая страница', () => {
-    /*
-     * Лист во всю ширину накрывал половину жёлоба вместе со швом. В конце
-     * переворота он пропадает, и эта полоска разом меняется с бумаги на тёмный
-     * шов — правый край левой страницы дёргался. Внутренний край листа обязан
-     * стоять там же, где внутренний край страницы.
-     */
     const sheet = build();
     const point = new THREE.Vector3();
 
@@ -858,12 +772,6 @@ describe('листающийся лист', () => {
   });
 
   it('лист не проваливается под стопку ни на одной доле переворота', () => {
-    /*
-     * Просвет умножался на тот же множитель, что и профиль, а множитель к
-     * середине переворота стремится к нулю. Высота лежащей страницы при этом
-     * ничем не масштабируется, и у корешка — где поворот подъёма не даёт —
-     * лист уходил под неё. Из-под него торчал чужой текст узкой полосой.
-     */
     const sheet = build();
     const point = new THREE.Vector3();
 
@@ -880,7 +788,6 @@ describe('листающийся лист', () => {
         sheet.front.getVertexPosition(index, point);
         sheet.front.localToWorld(point);
 
-        // Стопка, над которой точка оказалась, и её высота в этом месте.
         const fromSpine = Math.min(Math.abs(point.x) / PAGE_W, 1);
         if (Math.abs(point.x) < PAGE_INSET) continue;
 
@@ -910,8 +817,6 @@ describe('атрибут геометрии', () => {
   });
 
   it('падает с внятной ошибкой, когда атрибута нет', () => {
-    // Утверждение о непустоте валилось бы позже и в другом месте — на
-    // `undefined.count` посреди цикла по вершинам.
     const geometry = new THREE.BufferGeometry();
 
     expect(() => requireAttribute(geometry, 'position')).toThrow(
@@ -921,12 +826,32 @@ describe('атрибут геометрии', () => {
 });
 
 describe('щелчок по книге', () => {
-  const closed = { opened: false, spread: 0, link: false };
-  const open = (spread: number) => ({ opened: true, spread, link: false });
+  const closed = { opened: false, spread: 0, hotspot: null };
+  const open = (spread: number) => ({ opened: true, spread, hotspot: null });
 
   it('закрытая книга раскрывается щелчком по любой половине', () => {
     expect(pickAction(closed, 'left')).toBe('open');
     expect(pickAction(closed, 'right')).toBe('open');
+  });
+
+  it('сомкнутый том раскрывается и щелчком по корешку', () => {
+    expect(pickAction(closed, 'spine')).toBe('open');
+  });
+
+  it('корешок раскрытой книги закрывает её с любого разворота', () => {
+    expect(pickAction(open(0), 'spine')).toBe('close');
+    expect(pickAction(open(7), 'spine')).toBe('close');
+  });
+
+  it('печатное «закрыть» на поле старше листания', () => {
+    const at = (spread: number) => ({
+      opened: true,
+      spread,
+      hotspot: 'close' as const,
+    });
+
+    expect(pickAction(at(4), 'left')).toBe('close');
+    expect(pickAction(at(4), 'right')).toBe('close');
   });
 
   it('половина раскрытой книги решает направление', () => {
@@ -935,8 +860,6 @@ describe('щелчок по книге', () => {
   });
 
   it('на первом развороте левая страница закрывает книгу', () => {
-    // Листать назад оттуда некуда, и без этого правила левая половина просто
-    // не отвечает на щелчок — книга читается сломанной.
     expect(pickAction(open(0), 'left')).toBe('close');
   });
 
@@ -945,15 +868,21 @@ describe('щелчок по книге', () => {
   });
 
   it('ссылка старше листания и закрытия', () => {
-    // Строка ссылки занимает одну строку из всей полосы: промахнуться мимо
-    // неё легко, попасть случайно — нет. Поэтому она забирает щелчок.
-    expect(pickAction({ opened: true, spread: 3, link: true }, 'right')).toBe('link');
-    expect(pickAction({ opened: true, spread: 3, link: true }, 'left')).toBe('link');
-    expect(pickAction({ opened: true, spread: 0, link: true }, 'left')).toBe('link');
+    const link = (spread: number) => ({
+      opened: true,
+      spread,
+      hotspot: 'link' as const,
+    });
+
+    expect(pickAction(link(3), 'right')).toBe('link');
+    expect(pickAction(link(3), 'left')).toBe('link');
+    expect(pickAction(link(0), 'left')).toBe('link');
   });
 
   it('у закрытой книги ссылок нет: на виду обложка', () => {
-    expect(pickAction({ opened: false, spread: 0, link: true }, 'left')).toBe('open');
+    expect(pickAction({ opened: false, spread: 0, hotspot: 'link' }, 'left')).toBe(
+      'open',
+    );
   });
 });
 
@@ -961,8 +890,6 @@ describe('разворот подсказок', () => {
   const layout = spreads();
 
   it('стоит сразу за обложкой', () => {
-    // Управление нужно тому, кто книгу только что открыл, а не долиставшему до
-    // конца.
     expect(layout[1]).toEqual({ kind: 'guide' });
   });
 
@@ -1013,7 +940,6 @@ describe('позы книги в кадре', () => {
     const camera = new THREE.PerspectiveCamera(65, aspect, 0.1, 1000);
     camera.updateMatrixWorld(true);
 
-    // Книга стоит в системе координат камеры: её поза и есть матрица модели.
     const pose = new THREE.Matrix4().compose(
       READING.position,
       new THREE.Quaternion().setFromEuler(READING.rotation),
@@ -1030,71 +956,74 @@ describe('позы книги в кадре', () => {
   };
 
   it('раскрытая книга помещается в кадр с запасом', () => {
-    // Дистанция подбиралась ради читаемости текста, и легко подобрать её так,
-    // что нижний угол уходит за кромку: наклон книги виден только на проекции.
     for (const aspect of [4 / 3, 16 / 10, 16 / 9, 21 / 9]) {
       expect(marginOf(aspect)).toBeGreaterThan(READING_MARGIN);
     }
   });
 
   it('убранная книга лежит в правом нижнем углу кадра', () => {
-    // Сверху висит кнопка «Меню», внизу по центру — дорожка глав, слева
-    // внизу — компас.
     expect(STOWED.position.x).toBeGreaterThan(0);
     expect(STOWED.position.y).toBeLessThan(0);
   });
 
   it('убранный том мельче натуральной величины, раскрытый — крупнее', () => {
-    /*
-     * В углу книга — метка, и в натуральную величину она отъедала у мира
-     * заметный кусок кадра. Раскрытый разворот, наоборот, читают: лишняя пятая
-     * часть кегля решает, читается он с одного взгляда или с прищуром.
-     */
     expect(STOWED_SCALE).toBeLessThan(1);
     expect(READING_SCALE).toBeGreaterThan(1);
   });
 
   it('по убранному тому по-прежнему можно попасть указателем', () => {
-    // Щелчок по книге — единственный способ её открыть: ужимать метку до
-    // неприцельной некуда.
     expect(STOWED_SCALE).toBeGreaterThan(2 / 3);
   });
 
   /** Убранная поза: 0.9 юнита от глаза, угол обзора мира — 65°. */
   const STOWED_DEPTH = 0.9;
   const WORLD_FOV = 65;
-  /** Отступы до корешка от правой и нижней кромок — в юнитах на этой глубине. */
-  const SIDE = 0.23;
-  const GAP = 0.21;
+  /** Просветы от кромок кадра до силуэта, в юнитах на этой глубине. */
+  const MARGIN = { side: 0.03, bottom: 0.06 };
 
-  it('угол считается по кадру: книга уходит вправо вниз, но остаётся видимой', () => {
-    /*
-     * Место в углу не задано числом в юнитах — половина видимой ширины идёт за
-     * пропорциями окна, и на широком мониторе книга, поставленная числом,
-     * висела бы посреди пустоты.
-     */
-    const frame = frameHalf(STOWED_DEPTH, WORLD_FOV, 16 / 9);
-    const corner = stowedCorner(frame, SIDE, GAP);
-
-    expect(corner.x).toBeCloseTo(frame.width - SIDE, 6);
-    expect(corner.y).toBeCloseTo(-(frame.height - GAP), 6);
+  /** Кромки силуэта тома, стоящего началом координат в точке `at`. */
+  const edgesAt = (at: { x: number; y: number }) => ({
+    right: at.x + 0.08,
+    bottom: at.y - 0.11,
   });
 
-  it('над нижним рядом оболочки, а не за нижней кромкой', () => {
-    // Отступ снизу — это ряд кнопок: без него книга подлезала бы под него.
+  it('шаг ставит силуэт на просвет от правой и нижней кромок', () => {
     const frame = frameHalf(STOWED_DEPTH, WORLD_FOV, 16 / 9);
+    const at = { x: 0.2, y: -0.2 };
 
-    expect(stowedCorner(frame, SIDE, GAP).y).toBeGreaterThan(
-      stowedCorner(frame, SIDE, 0).y,
-    );
+    const moved = stowedCorner(at, edgesAt(at), frame, MARGIN);
+    const settled = edgesAt(moved);
+
+    expect(frame.width - settled.right).toBeCloseTo(MARGIN.side, 10);
+    expect(frame.height + settled.bottom).toBeCloseTo(MARGIN.bottom, 10);
+  });
+
+  it('просвет считается до кромки силуэта, а не до середины тома', () => {
+    const frame = frameHalf(STOWED_DEPTH, WORLD_FOV, 16 / 9);
+    const at = { x: 0.2, y: -0.2 };
+
+    const narrow = stowedCorner(at, { right: at.x + 0.05, bottom: -1 }, frame, MARGIN);
+    const wide = stowedCorner(at, { right: at.x + 0.09, bottom: -1 }, frame, MARGIN);
+
+    expect(narrow.x - wide.x).toBeCloseTo(0.04, 10);
+  });
+
+  it('шаг садится на место с любого начального места', () => {
+    const frame = frameHalf(STOWED_DEPTH, WORLD_FOV, 16 / 9);
+    const at = { x: 0.9, y: -0.05 };
+
+    const once = stowedCorner(at, edgesAt(at), frame, MARGIN);
+    const twice = stowedCorner(once, edgesAt(once), frame, MARGIN);
+
+    expect(twice.x).toBeCloseTo(once.x, 10);
+    expect(twice.y).toBeCloseTo(once.y, 10);
   });
 
   it('в тесном кадре книга не уезжает за противоположную кромку', () => {
-    // Узкое окно: отступов больше, чем самого кадра, — угол схлопывается в
-    // середину, а не выбрасывает книгу за левый край.
     const tight = { width: 0.05, height: 0.05 };
+    const at = { x: 0.2, y: -0.2 };
 
-    const corner = stowedCorner(tight, SIDE, GAP);
+    const corner = stowedCorner(at, edgesAt(at), tight, MARGIN);
 
     expect(corner.x).toBeCloseTo(0, 10);
     expect(corner.y).toBeCloseTo(0, 10);
@@ -1102,12 +1031,6 @@ describe('позы книги в кадре', () => {
 });
 
 describe('палитра книги и токены оболочки', () => {
-  /*
-   * Панель управления миром одета в бумагу книги, но берёт цвета из CSS, а
-   * холст страницы — из своего модуля: переменные CSS ему недоступны. Два
-   * набора значений разъезжаются молча — на кадре это «панель другого
-   * оттенка», и заметить это можно только рядом с открытой книгой.
-   */
   const tokens = readFileSync('src/app/styles/tokens.css', 'utf8');
 
   const tokenValue = (name: string): string => {
@@ -1127,8 +1050,6 @@ describe('палитра книги и токены оболочки', () => {
 
 describe('пролистывание до разворота подсказок', () => {
   it('соседний разворот листается обычным переворотом', () => {
-    // Ускорять этот случай значило бы завести два разных листания на одно
-    // движение: до соседа листают и без закладки.
     expect(rifflePlan(1)).toEqual({ pace: FLIP_SECONDS, settle: FLIP_SECONDS });
     expect(rifflePlan(0).pace).toBe(FLIP_SECONDS);
   });
@@ -1144,8 +1065,6 @@ describe('пролистывание до разворота подсказок'
   });
 
   it('лист не идёт быстрее пола видимости', () => {
-    // Ниже пола пачка вырождается в мельтешение текстур: на переворот
-    // остаётся меньше пяти кадров.
     expect(rifflePlan(200).pace).toBe(RIFFLE_MIN);
   });
 
@@ -1156,7 +1075,6 @@ describe('пролистывание до разворота подсказок'
   });
 
   it('дорога через всю книгу занимает считаные секунды', () => {
-    // Ради этого пролистывание и заведено: честные перевороты дали бы полминуты.
     const count = spreads().length - 1;
     const plan = rifflePlan(count);
     const total = plan.pace * (count - 1) + plan.settle;

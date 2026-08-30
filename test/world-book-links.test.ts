@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PageHotspot } from '@/lib/world/book/draw';
+import type { LinkHotspot } from '@/lib/world/book/draw';
 import { hotspotAt, openLink } from '@/lib/world/book/links';
 
 const SIZE = { width: 1024, height: 1448 };
 
-const spot = (over: Partial<PageHotspot> = {}): PageHotspot => ({
+const spot = (over: Partial<LinkHotspot> = {}): LinkHotspot => ({
+  kind: 'link',
   x: 100,
   y: 200,
   width: 300,
@@ -15,6 +16,10 @@ const spot = (over: Partial<PageHotspot> = {}): PageHotspot => ({
   ...over,
 });
 
+/** Адрес найденной мишени: у закрытия его нет, и тест на это и смотрит. */
+const hrefOf = (hotspot: ReturnType<typeof hotspotAt>) =>
+  hotspot?.kind === 'link' ? hotspot.href : null;
+
 /** Координаты текстуры для пикселя холста: `v` идёт снизу вверх. */
 const at = (x: number, y: number) => ({
   u: x / SIZE.width,
@@ -23,7 +28,9 @@ const at = (x: number, y: number) => ({
 
 describe('попадание в ссылку страницы', () => {
   it('находит ссылку под указателем', () => {
-    expect(hotspotAt([spot()], at(250, 230), SIZE)?.href).toBe('https://example.test/');
+    expect(hrefOf(hotspotAt([spot()], at(250, 230), SIZE))).toBe(
+      'https://example.test/',
+    );
   });
 
   it('промах мимо мишени ничего не даёт', () => {
@@ -32,26 +39,11 @@ describe('попадание в ссылку страницы', () => {
   });
 
   it('края мишени считаются попаданием', () => {
-    /*
-     * Иначе строка ловится уже, чем нарисована, и щелчок по её краю листает
-     * страницу вместо перехода.
-     *
-     * Проверяется пиксель внутри края, а не сам край: путь «пиксель → доля →
-     * пиксель» проходит через деление, и точная граница возвращается из него
-     * то на тысячную больше, то на тысячную меньше. Сравнивать края холста
-     * числами с плавающей точкой бессмысленно, а мишень и без того выше
-     * строки на запас в двенадцать пикселей.
-     */
     expect(hotspotAt([spot()], at(101, 201), SIZE)).not.toBeNull();
     expect(hotspotAt([spot()], at(399, 259), SIZE)).not.toBeNull();
   });
 
   it('ось высоты перевёрнута относительно текстуры', () => {
-    /*
-     * Ловушка перевода координат: `v` у геометрии смотрит вверх, `y` у холста
-     * — вниз. Без переворота мишень внизу страницы ловилась бы наверху, где
-     * ничего нет, и ссылка молча не открывалась бы.
-     */
     const low = spot({ y: 1300 });
 
     expect(
@@ -64,7 +56,7 @@ describe('попадание в ссылку страницы', () => {
     const first = spot({ y: 200, href: 'https://first.test/' });
     const second = spot({ y: 300, href: 'https://second.test/' });
 
-    expect(hotspotAt([first, second], at(150, 330), SIZE)?.href).toBe(
+    expect(hrefOf(hotspotAt([first, second], at(150, 330), SIZE))).toBe(
       'https://second.test/',
     );
   });
@@ -74,7 +66,6 @@ describe('попадание в ссылку страницы', () => {
   });
 
   it('открытие ссылки без окна не падает', () => {
-    // Страницу рисует и сервер — при пререндере окна нет, а код один.
     expect(() => openLink('https://example.test/')).not.toThrow();
   });
 });

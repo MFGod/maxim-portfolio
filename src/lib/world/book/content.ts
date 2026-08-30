@@ -1,20 +1,4 @@
-/**
- * Содержимое страниц книги — единственный источник и для холста, и для DOM.
- *
- * D8: страницу видит один посетитель и слышит другой. Холст рисует буквы в
- * текстуру, скринридер читает разметку, и если каждый из них пойдёт в резюме
- * своей дорогой, они разойдутся на первой же правке — молча, потому что
- * увидеть расхождение можно только ушами.
- *
- * Поэтому здесь модель, а не вёрстка: блок знает свою **роль**, а не шрифт.
- * Кегль, цвет и отступы живут в `draw.ts`, теги — в разметке страницы мира.
- * Общее у них — этот файл.
- *
- * Язык. Контент резюме остаётся русским при любой локали: так решено для всего
- * портфолио (`i18n`: «This switches system labels. Résumé, project and
- * experience content stays in Russian»). Переключается только хром книги —
- * подсказки, титул, служебные подписи, — и он приходит сюда переводчиком.
- */
+/** Содержимое страниц книги — единственный источник и для холста, и для DOM. */
 
 import { experience, getProject, profile } from '@/data/resume';
 import type { Translate, TranslationKey } from '@/lib/i18n';
@@ -25,13 +9,7 @@ import type { BookSpread } from './plan';
 /** Сторона разворота. Корешок у левой страницы справа, у правой — слева. */
 export type PageSide = 'left' | 'right';
 
-/**
- * Роль строки на странице.
- *
- * Роль, а не стиль: `chapterTitle` и `sectionTitle` различаются кеглем, но
- * названы по месту в книге — иначе правка типографики потребовала бы правки
- * содержимого.
- */
+/** Роль строки на странице. */
 export type TextRole =
   | 'name'
   | 'role'
@@ -71,19 +49,11 @@ export type PageFace = {
   side: PageSide;
 };
 
-/**
- * Блоки одной страницы.
- *
- * Пустой список — законный ответ: у ненайденной позиции или проекта страница
- * остаётся бумагой с колонцифрой. Бросать здесь нельзя, иначе опечатка в
- * `world-places.ts` роняла бы весь мир, а не одну страницу.
- */
+/** Блоки одной страницы. */
 export function pageContent(face: PageFace, t: Translate): PageBlock[] {
   const { spread, side } = face;
 
   if (spread.kind === 'cover') {
-    // Обе стороны заняты: пустая страница в развороте читается не приёмом, а
-    // недоделкой. Слева — авантитул с именем, справа — титул.
     return side === 'left' ? halfTitle() : cover(t);
   }
 
@@ -104,11 +74,6 @@ function halfTitle(): PageBlock[] {
     { kind: 'text', role: 'name', text: profile.name },
     { kind: 'text', role: 'role', text: profile.role },
     { kind: 'text', role: 'place', text: profile.location },
-    /*
-     * Контакты стоят на авантитуле, а не в конце книги. Это единственная
-     * страница, до которой доходит каждый: она открывается вместе с обложкой,
-     * и до неё не нужно долистать.
-     */
     {
       kind: 'links',
       items: profile.contacts.map((contact) => ({
@@ -121,19 +86,12 @@ function halfTitle(): PageBlock[] {
 
 function cover(t: Translate): PageBlock[] {
   return [
-    // Титул книги — тот же, что у страницы мира: это одна вещь, названная
-    // дважды, и расхождение здесь читалось бы опечаткой.
     { kind: 'text', role: 'coverTitle', text: t('world.screen.title') },
     { kind: 'text', role: 'coverBlurb', text: t('world.screen.subtitle') },
   ];
 }
 
-/**
- * Разворот подсказок: как листать книгу и как ходить по миру.
- *
- * Обе стороны устроены одинаково — заголовок и список, — потому что это одна
- * справка на двух страницах, а не две разные.
- */
+/** Разворот подсказок: как листать книгу и как ходить по миру. */
 function guide(t: Translate, side: PageSide): PageBlock[] {
   const scope = side === 'left' ? 'book' : 'world';
 
@@ -143,21 +101,13 @@ function guide(t: Translate, side: PageSide): PageBlock[] {
   ];
 }
 
-/**
- * Строки подсказок, перечисленные ключами.
- *
- * Списком, а не циклом по номерам: словарь — плоская запись, и ключ, собранный
- * из куска и числа, типами не проверяется. Здесь же лишняя строка в словаре без
- * строки в этом списке просто не попадёт на страницу, а опечатка в ключе не
- * соберётся.
- */
+/** Строки подсказок, перечисленные ключами. */
 const GUIDE_LINES = {
   book: [
     'world.book.guide.book.1',
     'world.book.guide.book.2',
     'world.book.guide.book.3',
     'world.book.guide.book.4',
-    'world.book.guide.book.5',
   ],
   world: [
     'world.book.guide.world.1',
@@ -185,11 +135,6 @@ function chapter(positionId: string, side: PageSide): PageBlock[] {
     blocks.push({ kind: 'text', role: 'summary', text: position.summary });
   }
 
-  /*
-   * Оглавление главы. Без него страница пустела там, где в резюме нет зоны
-   * ответственности одним абзацем, — а это ровно Cleverbots с восемью
-   * проектами, самая насыщенная глава книги.
-   */
   const named = position.projectSlugs
     .map((slug) => getProject(slug)?.name)
     .filter((name): name is string => Boolean(name));
@@ -222,14 +167,8 @@ function project(slug: string, side: PageSide): PageBlock[] {
       blocks.push({ kind: 'text', role: 'paragraph', text: found.problem });
     }
 
-    blocks.push({ kind: 'text', role: 'stack', text: found.stack.join(' · ') });
+    blocks.push({ kind: 'text', role: 'stack', text: found.stack.join(', ') });
 
-    /*
-     * Ссылки на левой странице, под стеком: правая занята рассказом о работе и
-     * дорастает до низа полосы, а левая у большинства проектов кончается на
-     * стеке. Проектов со ссылками мало — остальные под NDA и `links` у них
-     * пустой, — поэтому строка не должна отнимать место у текста.
-     */
     if (found.links.length > 0) {
       blocks.push({ kind: 'links', items: found.links });
     }
