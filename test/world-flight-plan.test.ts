@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { samplePath, type PathKey } from '@/lib/world/camera-path';
-import { planFlight, type CeilingProbe } from '@/lib/world/flight-plan';
+import {
+  edgeShare,
+  edgeWindow,
+  liftAbove,
+  planFlight,
+  shortfallAt,
+  type CeilingProbe,
+} from '@/lib/world/flight-plan';
+import { POCKET_SLACK } from '@/lib/world/shots';
 
 const from: PathKey = { at: [0, 2, 0], look: [0, 2, -10] };
 const to: PathKey = { at: [40, 2, 0], look: [40, 2, -10] };
@@ -191,4 +199,85 @@ describe('плавность пути', () => {
       }
     });
   }
+});
+
+/**
+ * Подъём на самом пролёте. Риг собирает его из этих частей, но сам под тест не идёт:
+ * ему нужны живой холст и `OrbitControls`, а тесты гоняются в `node`.
+ */
+describe('подъём на пролёте', () => {
+  const edges = [0.01, 0.036, 0.1, 0.18];
+
+  it('у концов пути подъём погашен целиком', () => {
+    for (const edge of edges) {
+      expect(edgeWindow(0, edge), `слепая зона ${edge}`).toBe(0);
+      expect(edgeWindow(1, edge), `слепая зона ${edge}`).toBe(0);
+    }
+  });
+
+  it('гейт нарастает без излома и доходит до единицы', () => {
+    const edge = 0.1;
+    const steps = 200;
+
+    let previous = edgeWindow(0, edge);
+    for (let step = 1; step <= steps; step++) {
+      const value = edgeWindow((step / steps) * edge, edge);
+      expect(value, `шаг ${step}`).toBeGreaterThanOrEqual(previous);
+      previous = value;
+    }
+
+    expect(previous).toBeCloseTo(1, 10);
+
+    /**
+     * У самого края наклон практически нулевой: приподнятый косинус входит гладко,
+     * а не изломом. Мерим против среднего наклона гейта — `1 / edge`.
+     */
+    const step = edge / steps;
+    expect(edgeWindow(step, edge) / step).toBeLessThan(0.05 / edge);
+  });
+
+  it('слепая зона мерится юнитами, пока не упрётся в прежнюю долю', () => {
+    expect(edgeShare(45)).toBeCloseTo(1.6 / 45, 10);
+    expect(edgeShare(4)).toBeCloseTo(0.18, 10);
+    expect(edgeShare(0)).toBeCloseTo(0.18, 10);
+  });
+
+  it('в кармане ракурса камера не под пределом: жёсткой недостачи нет', () => {
+    const y = 1.56;
+    const { hard, soft } = shortfallAt(y, y - POCKET_SLACK);
+
+    expect(hard).toBe(0);
+    expect(soft).toBeCloseTo(0.0446, 4);
+  });
+
+  it('камера ровно на куполе тоже не под пределом', () => {
+    const y = 1.56;
+    const { hard, soft } = shortfallAt(y, y);
+
+    expect(hard).toBe(0);
+    expect(soft).toBeCloseTo(0.0875, 4);
+  });
+
+  it('под пределом жёсткая часть вынимает камеру целиком', () => {
+    expect(shortfallAt(3, 5).hard).toBeCloseTo(2, 10);
+  });
+
+  it('выше полосы сглаживания подъёма нет вовсе', () => {
+    expect(shortfallAt(5, 1).hard).toBe(0);
+    expect(shortfallAt(5, 1).soft).toBe(0);
+  });
+
+  it('жёсткая и мягкая вместе дают прежнюю недостачу', () => {
+    const limit = 4;
+
+    for (let step = -20; step <= 20; step++) {
+      const y = limit + step / 20;
+      const { hard, soft } = shortfallAt(y, limit);
+
+      expect(hard + soft, `высота ${y}`).toBeCloseTo(
+        Math.max(liftAbove(y, limit) - y, 0),
+        10,
+      );
+    }
+  });
 });

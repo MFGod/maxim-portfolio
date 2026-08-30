@@ -29,6 +29,31 @@ const SKIRT = 0.45;
 /** Сколько опор ставится между станциями, когда путь гнётся. */
 const INNER_KEYS = 6;
 
+/** Полоса, в которой предел высоты начинает действовать, а не срабатывает разом. */
+const LIMIT_MARGIN = 0.35;
+
+/** Мягкий предел снизу: выше полосы значение не трогается, ниже — упирается. */
+export function liftAbove(value: number, limit: number): number {
+  const blend = Math.min(Math.max(0.5 + (value - limit) / (2 * LIMIT_MARGIN), 0), 1);
+
+  return limit + (value - limit) * blend + LIMIT_MARGIN * blend * (1 - blend);
+}
+
+/**
+ * Недостача высоты в точке, разложенная по природе.
+ *
+ * `hard` — камера ушла под предел, её надо вынуть; на утверждённом ракурсе и под ногами
+ * ходока он равен нулю. `soft` — горб сглаживания над самим пределом; он есть даже там,
+ * где камере стоять разрешено, и потому гасится у концов пути. Вместе они дают ту же
+ * недостачу, что и `liftAbove` целиком.
+ */
+export function shortfallAt(y: number, limit: number): { hard: number; soft: number } {
+  return {
+    hard: Math.max(limit - y, 0),
+    soft: Math.max(liftAbove(y, limit) - Math.max(y, limit), 0),
+  };
+}
+
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 const lerpPoint = (a: Point3, b: Point3, t: number): Point3 => [
@@ -89,8 +114,16 @@ function bulge(lifts: number[], index: number): number {
   return APEX * Math.cos((Math.PI / 2) * ((index - middle) / half)) ** 2;
 }
 
+/**
+ * Слепая зона в долях пути: юниты у концов, но не больше прежней доли.
+ * @param span расстояние между концами пути
+ */
+export function edgeShare(span: number): number {
+  return span > 0 ? Math.min(EDGE_MAX, EDGE_UNITS / span) : EDGE_MAX;
+}
+
 /** Окно у станций: подъём гасится к концам пути. */
-function edgeWindow(t: number, edge: number): number {
+export function edgeWindow(t: number, edge: number): number {
   const away = Math.min(t, 1 - t);
   if (away >= edge) return 1;
 
@@ -114,7 +147,7 @@ export function planFlight(
     to.at[1] - from.at[1],
     to.at[2] - from.at[2],
   );
-  const edge = span > 0 ? Math.min(EDGE_MAX, EDGE_UNITS / span) : EDGE_MAX;
+  const edge = edgeShare(span);
 
   const probed = probeCeilings(from, to, ceiling, edge);
   const reach = 1 / (INNER_KEYS + 1);
