@@ -77,6 +77,7 @@ function fakeLoader(onLoad?: () => void) {
 function figure(patch: Partial<WorldFigure> = {}): WorldFigure {
   return {
     id: 'один',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [0, 0, 0],
@@ -217,7 +218,6 @@ describe('инструмент расстановки', () => {
 
     tweakFigure('башня-1', { turn: 1.2 });
     expect(listFigures()[0]!.turn).toBe(1.2);
-    // Данные при этом не трогаются: правится только черновик.
     expect(исходная.turn).toBe(0);
   });
 
@@ -309,7 +309,6 @@ describe('фигуры в сцене', () => {
   });
 
   it('перебитый показ не оставляет половину набора', async () => {
-    // Расстановка перестраивает набор на каждое касание: вызовы накладываются.
     const figures = createFigures({ loader: fakeLoader() });
 
     const stale = figures.show([figure({ id: 'а' }), figure({ id: 'б' })]);
@@ -344,7 +343,6 @@ describe('фигуры в сцене', () => {
 
   it('не считает кости за краем кадра', async () => {
     const figures = createFigures({ loader: fakeLoader() });
-    // Фигура рядом с камерой по расстоянию, но за спиной.
     await figures.show([figure({ at: [0, 0, 3] })]);
 
     const before = figures.object.children[0]!.getObjectByName('body')!.position.y;
@@ -412,28 +410,23 @@ describe('traceGround', () => {
   const flat = () => 1;
 
   it('находит землю под наклонным лучом', () => {
-    // Arrange
     const origin = new THREE.Vector3(0, 3, 0);
     const direction = new THREE.Vector3(1, -1, 0).normalize();
 
-    // Act
     const point = traceGround(origin, direction, flat);
 
-    // Assert
     expect(point).not.toBeNull();
     expect(point!.y).toBeCloseTo(1, 6);
     expect(point!.x).toBeCloseTo(2, 3);
   });
 
   it('уточняет касание точнее собственного шага', () => {
-    // Склон: земля поднимается на 0,5 юнита на юнит по X.
     const slope = (x: number) => x * 0.5;
     const origin = new THREE.Vector3(0, 2, 0);
     const direction = new THREE.Vector3(1, -1, 0).normalize();
 
     const point = traceGround(origin, direction, slope)!;
 
-    // Точное решение: 2 - t = 0.5t → t = 4/3.
     expect(point.x).toBeCloseTo(4 / 3, 3);
     expect(point.y).toBeCloseTo(2 / 3, 3);
   });
@@ -454,7 +447,6 @@ describe('traceGround', () => {
 
   it('не бьёт в землю за пределом дальности', () => {
     const origin = new THREE.Vector3(0, 3, 0);
-    // Луч уходит почти горизонтально: земля на высоте 1 останется недостижимой.
     const direction = new THREE.Vector3(1, -0.001, 0).normalize();
 
     expect(traceGround(origin, direction, flat)).toBeNull();

@@ -1,18 +1,4 @@
-/**
- * Расстановка фигур — инструмент подбора, брат `dev-shots.ts`.
- *
- * Расставляет человек, а живут координаты в `src/data/world-figures.ts`
- * (решение D4). Между подбором и данными нужен мост: поставить фигуру туда,
- * куда смотрит камера, подвинуть, повернуть, изменить рост — и выгрузить всё
- * готовым куском кода.
- *
- * Хранилище — `localStorage`: подбор идёт часами и переживает перезагрузки.
- * Оно чужое и ненадёжное, поэтому читаем с проверкой каждой записи, а отказ
- * записи не роняет вызов.
- *
- * Модуль ничего не знает про сцену: он про список фигур. Показывает их
- * `figures.ts`, связывает одно с другим `scene.ts`.
- */
+/** Расстановка фигур — инструмент подбора, брат `dev-shots.ts`. */
 
 import {
   FIGURE_CLIPS,
@@ -21,18 +7,13 @@ import {
   MIN_FIGURE_HEIGHT,
   type FigureClip,
   type FigureModel,
+  type FigureRole,
   type WorldFigure,
 } from '@/data/world-figures';
 
 const STORE = 'world.dev.figures';
 
-/**
- * Отдельный ключ под снятые фигуры.
- *
- * Расстановка из `src/data` заморожена, и удалить оттуда фигуру подбором
- * нельзя — можно только пометить её снятой. Пометки живут своим списком имён:
- * так черновик остаётся списком фигур, а не смесью фигур и надгробий.
- */
+/** Отдельный ключ под снятые фигуры. */
 const DROPPED = 'world.dev.figures.dropped';
 
 /** Приставка автоматических имён. Номер после неё продолжает нумерацию. */
@@ -46,11 +27,19 @@ export const DEFAULT_HEIGHT = 0.08;
 const DEFAULT_MODEL: FigureModel = 'skeleton_warrior';
 const DEFAULT_CLIP: FigureClip = 'Idle';
 
+/**
+ * Роль по умолчанию. `gate` потому, что подбор чаще всего начинается со стражи
+ * у входа, и её распорядок самый скупой: подобранная вслепую фигура не начнёт
+ * вдруг ликовать посреди пустого поля.
+ */
+const DEFAULT_ROLE: FigureRole = 'gate';
+
 const round = (value: number): number => +value.toFixed(3);
 
 /** Что можно задать при постановке и что — поправить потом. */
 export type FigurePatch = {
   id?: string;
+  role?: FigureRole;
   model?: FigureModel;
   clip?: FigureClip;
   at?: readonly [number, number, number];
@@ -104,9 +93,7 @@ function read(): WorldFigure[] {
 
 /**
  * Пишет список фигур.
- *
  * @returns удалось ли сохранить. Отказ хранилища — не повод падать посреди
- *   подбора: фигура всё равно встанет в сцену, просто не переживёт перезагрузку.
  */
 function write(figures: WorldFigure[]): boolean {
   if (typeof localStorage === 'undefined') return false;
@@ -135,12 +122,7 @@ function nextAutoNumber(figures: WorldFigure[]): number {
 const clampHeight = (height: number): number =>
   Math.min(Math.max(height, MIN_FIGURE_HEIGHT), MAX_FIGURE_HEIGHT);
 
-/**
- * Ставит фигуру. Точка — из `patch.at`, иначе та, куда смотрит камера.
- *
- * Фигура с уже занятым `id` заменяется: подбор — это уточнение одной фигуры,
- * а не размножение её копий.
- */
+/** Ставит фигуру. Точка — из `patch.at`, иначе та, куда смотрит камера. */
 export function placeFigure(
   at: readonly [number, number, number],
   patch: FigurePatch = {},
@@ -150,6 +132,7 @@ export function placeFigure(
 
   const figure: WorldFigure = {
     id: patch.id ?? `${AUTO_PREFIX}-${nextAutoNumber(figures)}`,
+    role: patch.role ?? DEFAULT_ROLE,
     model: patch.model ?? DEFAULT_MODEL,
     clip: patch.clip ?? DEFAULT_CLIP,
     at: [round(point[0]), round(point[1]), round(point[2])],
@@ -216,11 +199,6 @@ export function droppedFigures(): string[] {
 
 /**
  * Берёт фигуру из данных в черновик как есть.
- *
- * Правка утверждённой расстановки начинается отсюда: копия ложится в
- * `localStorage`, дальше её двигают обычным `tweakFigure`, а при показе она
- * перебивает исходную по имени.
- *
  * @returns копия или та, что уже была в черновике
  */
 export function adoptFigure(figure: WorldFigure): WorldFigure {
@@ -235,10 +213,6 @@ export function adoptFigure(figure: WorldFigure): WorldFigure {
 
 /**
  * Убирает фигуру из мира.
- *
- * Черновая просто исчезает, а пришедшая из данных остаётся в файле — её имя
- * уходит в список снятых, и показ её пропускает.
- *
  * @returns была ли она вообще
  */
 export function removeFigure(id: string): boolean {
@@ -262,7 +236,6 @@ export function clearFigures(): void {
 export function formatFigures(figures: readonly WorldFigure[]): string {
   return figures
     .map((figure) => {
-      // Имя задаёт человек, и апостроф в нём порвал бы строковый литерал.
       const id = figure.id.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
       return (
         `  {\n` +
@@ -286,13 +259,7 @@ export function exportFigures(): string {
 /** Начало файла данных: всё до самого массива. */
 const FIGURES_ANCHOR = 'export const worldFigures';
 
-/**
- * Собирает новое содержимое `src/data/world-figures.ts`.
- *
- * Шапка файла — типы, список моделей, клипы и объяснение, откуда взялись
- * координаты — сохраняется как есть: меняется только массив. Так правка мышью
- * не стирает то, что писалось руками.
- */
+/** Собирает новое содержимое `src/data/world-figures.ts`. */
 export function figuresFileBody(
   current: string,
   figures: readonly WorldFigure[],

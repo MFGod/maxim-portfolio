@@ -1,29 +1,4 @@
-/**
- * Запекание маршрутов дозоров — инструмент, брат `dev-crowd.ts`.
- *
- * Маршрут дозора живёт в `src/data/world-patrols.ts` ломаной из полусотни
- * точек. Проложить её на глаз нельзя: лента дороги в этой карте шириной
- * 0,05–0,15 юнита — уже самой фигуры, — а идущий должен и держаться её
- * середины, и стоять ногами ровно на настиле. Первая укладка делалась поиском
- * по растру с полосой травы по сторонам: путь держался дороги, но не её
- * середины, и половину пути идущий свисал с ленты, а высота местами снималась
- * с рельефа под мостом — до 0,112 юнита провала при росте фигуры 0,117.
- *
- * Отсюда правило этого модуля: **высота и середина берутся у самой ленты**.
- * Лента — единственный меш с материалом `Path`, 15 186 треугольников. Луч по
- * ней стоил бы десятки миллисекунд на замер (`surfaceAt` метит в целую карту,
- * там 7 миллионов), а замеров нужны тысячи. Поэтому треугольники раскладываются
- * по клеткам сетки один раз, и высота в точке — это разбор нескольких
- * треугольников из клетки, а не обход карты.
- *
- * Высот в точке может быть несколько: на мостах лента лежит ярусами. Берётся
- * верхний из тех, что рядом с высотой предыдущего шага: верхний — потому что
- * его и видно под ногами, рядом — потому что иначе маршрут перепрыгивал бы на
- * настил моста, проходя под ним.
- *
- * Модуль дев-только: он ничего не рисует и вызывается из консоли
- * (`__world.patrols`). Итог его работы — текст для `src/data/world-patrols.ts`.
- */
+/** Запекание маршрутов дозоров — инструмент, брат `dev-crowd.ts`. */
 
 import * as THREE from 'three';
 
@@ -42,12 +17,7 @@ export type Ribbon = {
   size: number;
 };
 
-/**
- * Сторона клетки индекса, юниты.
- *
- * Полюнита: треугольник ленты мельче клетки, и в клетке оказывается десяток
- * кандидатов — разобрать их дешевле, чем держать сетку в четыре раза мельче.
- */
+/** Сторона клетки индекса, юниты. */
 const INDEX_CELL = 0.5;
 
 /** Допуск барицентрической проверки: точка на общем ребре принадлежит обоим. */
@@ -56,13 +26,7 @@ const EDGE_SLACK = 1e-6;
 /** Ближе этого две высоты — один и тот же ярус, посчитанный дважды. */
 const SAME_LEVEL = 1e-4;
 
-/**
- * Треугольники карты в мировых координатах, отобранные по имени материала.
- *
- * Отбор по материалу, а не по имени меша: имена мешей в карте автоматические
- * (`Icosphere430_26`), а материалы — авторские (`Path`, `Liurnia - Grass`) и
- * переживают перезапекание карты.
- */
+/** Треугольники карты в мировых координатах, отобранные по имени материала. */
 export function surfaceTriangles(
   root: THREE.Object3D,
   match: (material: string, first: THREE.Material) => boolean,
@@ -101,12 +65,7 @@ export function surfaceTriangles(
 export const ribbonTriangles = (root: THREE.Object3D, material = 'Path'): Triangle[] =>
   surfaceTriangles(root, (name) => name === material);
 
-/**
- * Индекс ленты: треугольники по клеткам сетки в плоскости XZ.
- *
- * Чистая функция от списка треугольников — три о ней не знает, и проверять её
- * можно на выдуманной ленте из двух полос.
- */
+/** Индекс ленты: треугольники по клеткам сетки в плоскости XZ. */
 export function buildRibbon(triangles: readonly Triangle[], cell = INDEX_CELL): Ribbon {
   const cells = new Map<string, number[]>();
 
@@ -137,8 +96,6 @@ export function buildRibbon(triangles: readonly Triangle[], cell = INDEX_CELL): 
     for (const id of bucket) {
       const [a, b, c] = triangles[id]!;
 
-      // Барицентрические веса в плоскости XZ: вырожденный по земле
-      // треугольник (стенка бордюра) высоты не даёт и пропускается.
       const area = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
       if (Math.abs(area) < 1e-12) continue;
 
@@ -152,9 +109,6 @@ export function buildRibbon(triangles: readonly Triangle[], cell = INDEX_CELL): 
 
     heights.sort((first, second) => second - first);
 
-    // На общем ребре точка принадлежит обоим треугольникам, и один ярус
-    // приходит дважды. Ярусы моста отстоят на десятые доли — слипнуться от
-    // такого допуска они не могут.
     return heights.filter(
       (height, at) => at === 0 || Math.abs(height - heights[at - 1]!) > SAME_LEVEL,
     );
@@ -163,14 +117,6 @@ export function buildRibbon(triangles: readonly Triangle[], cell = INDEX_CELL): 
   return {
     heightsAt,
     levelAt: (x, z, expect, tolerance = LEVEL_TOLERANCE) => {
-      /*
-       * Верхний из допустимых, а не ближайший к ожиданию. Ближайший ошибается
-       * там, где к дороге снизу подходит вторая лента: у съезда под мост оба
-       * яруса рядом, ближайшим оказывается нижний — и маршрут, шаг за шагом
-       * держась «непрерывности», уезжает под настил на семь десятых юнита.
-       * Настоящий нижний ярус от верхнего отстоит куда дальше допуска, так что
-       * маршрут, который и правда идёт под мостом, верхний не перехватит.
-       */
       for (const height of heightsAt(x, z)) {
         if (Math.abs(height - expect) <= tolerance) return height;
       }
@@ -180,12 +126,7 @@ export function buildRibbon(triangles: readonly Triangle[], cell = INDEX_CELL): 
   };
 }
 
-/**
- * Насколько ярус может отстоять от ожидаемой высоты, чтобы считаться тем же.
- *
- * 0,15 — чуть больше роста фигуры: соседний ярус моста отстоит на восемь
- * десятых, случайный уступ ленты — на сантиметры.
- */
+/** Насколько ярус может отстоять от ожидаемой высоты, чтобы считаться тем же. */
 const LEVEL_TOLERANCE = 0.15;
 
 export type BakeOptions = {
@@ -197,13 +138,7 @@ export type BakeOptions = {
   across: number;
   /** Допуск выбора яруса, юниты. */
   tolerance: number;
-  /**
-   * Предел полуширины ленты, юниты.
-   *
-   * На перекрёстке поперечный проход уходит в пересекающую дорогу, и середина
-   * «ленты» съезжает на середину перекрёстка. Ограничитель держит замер в
-   * пределах разумной дороги: лента в этой карте не шире 0,15.
-   */
+  /** Предел полуширины ленты, юниты. */
   halfWidth: number;
   /** Полуширина фигуры: по ней проверяется, стоят ли на ленте обе ноги. */
   figureHalf: number;
@@ -213,14 +148,12 @@ export type BakeOptions = {
   keepY: number;
   /** Сколько раз чинить упрощённую ломаную по замеру ленты. */
   repairs: number;
-  /**
-   * Что стоит на дороге: имя мешающего инстанса или `null`.
-   *
-   * Без неё центровка загоняет идущих в куст, который прежний маршрут обходил
-   * стороной: середина ленты и свободное место — разные вещи. С ней точка
-   * сходит с середины ровно настолько, чтобы разминуться, и возвращается.
-   */
-  blocked?: (x: number, z: number) => string | null;
+  /** Насколько обход вправе сойти с ленты на обочину, юниты. */
+  stray: number;
+  /** Что стоит на дороге: имя мешающего инстанса или `null`. */
+  blocked?: (x: number, z: number, low?: number, high?: number) => string | null;
+  /** Рост фигуры, юниты. По нему считается полоса высот для `blocked`. */
+  figureHeight: number;
 };
 
 export const BAKE_DEFAULTS: BakeOptions = {
@@ -233,7 +166,12 @@ export const BAKE_DEFAULTS: BakeOptions = {
   keepXZ: 0.008,
   keepY: 0.004,
   repairs: 8,
+  figureHeight: 0.117,
+  stray: 0,
 };
+
+/** На сколько щиколотки подняты над настилом при замере тела. */
+const FOOT_CLEARANCE = 0.015;
 
 /** Точка ленты под ногами: где её середина и на какой она высоте. */
 export type Centered = {
@@ -248,11 +186,6 @@ export type Centered = {
 
 /**
  * Середина ленты в сечении по нормали к ходу.
- *
- * Проход идёт от исходной точки в обе стороны, пока под ним лента того же
- * яруса. Если исходная точка уже сошла с ленты — сперва ищется ближайшая
- * сторона, где лента есть, и проход начинается оттуда.
- *
  * @returns `null`, если ленты в пределах `reach` нет вовсе (брод, разрыв)
  */
 export function centerOnRibbon(
@@ -304,39 +237,38 @@ export function centerOnRibbon(
   };
 }
 
-/**
- * Занято ли место под идущим и на полшага до и после него.
- *
- * Проверять одну точку мало: обход, начатый вплотную к кусту, входит в него
- * наискось — идущий уже свернул, а плечо ещё цепляет. Полшага — это полуширина
- * фигуры: тот же запас, каким `dev-crowd.ts` расширяет след инстанса.
- */
+/** Занято ли место под идущим — по кресту из его собственных размеров. */
 function blockedNear(
   options: BakeOptions,
   x: number,
   z: number,
-  tx: number,
-  tz: number,
+  nx: number,
+  nz: number,
+  y: number,
 ): boolean {
-  const { blocked, figureHalf } = options;
+  const { blocked, figureHalf, figureHeight } = options;
   if (!blocked) return false;
 
+  const low = y + FOOT_CLEARANCE;
+  const high = y + figureHeight;
+  const tx = nz;
+  const tz = -nx;
+
   return (
-    blocked(x, z) !== null ||
-    blocked(x + tx * figureHalf, z + tz * figureHalf) !== null ||
-    blocked(x - tx * figureHalf, z - tz * figureHalf) !== null
+    blocked(x, z, low, high) !== null ||
+    blocked(x + nx * figureHalf, z + nz * figureHalf, low, high) !== null ||
+    blocked(x - nx * figureHalf, z - nz * figureHalf, low, high) !== null ||
+    blocked(x + tx * figureHalf, z + tz * figureHalf, low, high) !== null ||
+    blocked(x - tx * figureHalf, z - tz * figureHalf, low, high) !== null
   );
 }
 
-/**
- * Ближайшее свободное место в стороне от середины ленты.
- *
- * Проход идёт от середины в обе стороны поровну, поэтому обход выходит
- * минимальным: идущий сходит с середины настолько, насколько велик куст, и не
- * дальше. Ленту при этом не покидает — уйти на траву ради обхода хуже, чем
- * задеть плечом куст. Если свободного места на ленте нет вовсе, остаётся
- * середина: место занято целиком, и выбирать не из чего.
- */
+/** Чьё тело стоит ровно здесь: без запаса на шаг вперёд и назад. */
+function bodyAt(options: BakeOptions, x: number, z: number, y: number): string | null {
+  return options.blocked?.(x, z, y + FOOT_CLEARANCE, y + options.figureHeight) ?? null;
+}
+
+/** Ближайшее свободное место в стороне от середины ленты. */
 function stepAside(
   ribbon: Ribbon,
   centered: Centered,
@@ -345,37 +277,34 @@ function stepAside(
   options: BakeOptions,
 ): Centered {
   const { blocked, across, tolerance } = options;
-  // Ход — это нормаль, повёрнутая обратно: (nx, nz) = (-dz, dx).
-  const tx = nz;
-  const tz = -nx;
-  if (!blocked || !blockedNear(options, centered.x, centered.z, tx, tz))
+  if (!blocked || !blockedNear(options, centered.x, centered.z, nx, nz, centered.y))
     return centered;
 
-  /*
-   * Запас со стороны препятствия. Место, свободное впритык, свободным не
-   * считается: точки маршрута округляются до тысячных, и обход, проложенный по
-   * самой кромке куста, после округления снова оказывается в нём.
-   */
   const clearance = across * 2;
 
-  for (let shift = across; shift <= centered.half; shift += across) {
+  const limit = centered.half + Math.max(options.stray, 0);
+  for (let shift = across; shift <= limit; shift += across) {
     for (const side of [1, -1]) {
       const x = centered.x + nx * shift * side;
       const z = centered.z + nz * shift * side;
-      if (blockedNear(options, x, z, tx, tz)) continue;
+
+      const y =
+        ribbon.levelAt(x, z, centered.y, tolerance) ??
+        (shift > centered.half ? centered.y : null);
+      if (y === null) continue;
+
+      if (blockedNear(options, x, z, nx, nz, y)) continue;
       if (
         blockedNear(
           options,
           x - nx * clearance * side,
           z - nz * clearance * side,
-          tx,
-          tz,
+          nx,
+          nz,
+          y,
         )
       )
         continue;
-
-      const y = ribbon.levelAt(x, z, centered.y, tolerance);
-      if (y === null) continue;
 
       return { x, z, y, half: centered.half, shift: centered.shift + shift * side };
     }
@@ -395,36 +324,16 @@ function normalOf(from: Point3, to: Point3): [number, number] {
 
 type Sample = { x: number; y: number; z: number; onRibbon: boolean };
 
-/**
- * С какой высоты начинать ход.
- *
- * Не с той, что записана у первой точки: прежняя укладка местами начиналась под
- * настилом — у дозора-3 запись 6,297 при видимой поверхности 6,757, полроста
- * под землёй. Дальше эта ошибка тянулась по всему маршруту, потому что каждый
- * следующий ярус выбирается по предыдущему. Поэтому начало берётся у самой
- * ленты: верхний ярус под первой точкой, если он вообще похож на записанный.
- */
+/** С какой высоты начинать ход. */
 function startLevel(ribbon: Ribbon, first: Point3): number {
   const top = ribbon.heightsAt(first[0], first[2])[0];
   return top !== undefined && Math.abs(top - first[1]) <= START_REACH ? top : first[1];
 }
 
-/**
- * Насколько верх ленты может отстоять от записанной высоты начала.
- *
- * Полюнита — четыре роста фигуры: столько отделяет настил от съезда под ним.
- * Настоящий ярус моста отстоит дальше, и маршрут, идущий под мостом, наверх
- * не прыгнет.
- */
+/** Насколько верх ленты может отстоять от записанной высоты начала. */
 const START_REACH = 0.5;
 
-/**
- * Плотная выборка по исходной ломаной, сведённая на середину ленты.
- *
- * Разрывы ленты (броды, обвалы настила) не выбрасываются: маршрут через них
- * проходит, и точки там остаются на своих местах — высоту им поставит
- * `fillGaps` по краям разрыва.
- */
+/** Плотная выборка по исходной ломаной, сведённая на середину ленты. */
 function densify(
   ribbon: Ribbon,
   route: readonly Point3[],
@@ -440,8 +349,6 @@ function densify(
     const steps = Math.max(Math.ceil(span / options.step), 1);
     const [nx, nz] = normalOf(from, to);
 
-    // Первое звено отдаёт и свою начальную точку, остальные — нет: иначе
-    // на каждом стыке в выборке оказывалась бы пара совпавших точек.
     for (let k = i === 1 ? 0 : 1; k <= steps; k++) {
       const part = k / steps;
       const x = from[0] + (to[0] - from[0]) * part;
@@ -455,12 +362,6 @@ function densify(
         expect = free.y;
       } else {
         samples.push({ x, y, z, onRibbon: false });
-        /*
-         * На разрыве ждать прежнюю высоту нельзя: брод спускается к воде, и на
-         * выходе лента лежит ниже — по прежнему ожиданию она не нашлась бы
-         * вовсе, и весь остаток маршрута считался бы разрывом. Пока ленты нет,
-         * ожидание ведёт исходная ломаная.
-         */
         expect = y;
       }
     }
@@ -469,12 +370,7 @@ function densify(
   return samples;
 }
 
-/**
- * Высота на разрыве ленты — по прямой между её краями.
- *
- * Тянуть высоту предыдущей точки нельзя: брод спускается к воде и снова
- * поднимается, и на выходе идущий оказался бы по пояс в берегу.
- */
+/** Высота на разрыве ленты — по прямой между её краями. */
 function fillGaps(samples: Sample[]): void {
   for (let i = 0; i < samples.length; i++) {
     if (samples[i]!.onRibbon) continue;
@@ -515,10 +411,13 @@ function smooth(ribbon: Ribbon, samples: Sample[], options: BakeOptions): void {
       const y = ribbon.levelAt(x, z, current.y, options.tolerance);
       if (y === null) continue;
 
-      // Сглаживание не вправе загонять обратно в то, что точка обошла.
+      const [nx, nz] = normalOf(
+        [previous.x, previous.y, previous.z],
+        [next.x, next.y, next.z],
+      );
       if (
-        options.blocked?.(x, z) != null &&
-        options.blocked(current.x, current.z) === null
+        blockedNear(options, x, z, nx, nz, y) &&
+        !blockedNear(options, current.x, current.z, nx, nz, current.y)
       )
         continue;
 
@@ -597,25 +496,19 @@ export type Audit = {
   footOffShare: number;
   /** Замеры, где ленты нет вовсе — разрывы маршрута. */
   gaps: number;
-  /** Замеры, где идущий задевает инстанс. Считается, если задана `blocked`. */
+  /** Замеры, где идущий задевает след инстанса. Считается, если задана `blocked`. */
   touches: number;
-  /**
-   * Замеры, над которыми низко висит другой ярус ленты.
-   *
-   * Признак того, что идущий уехал под настил соседней дороги: настоящий мост
-   * висит выше (`COVER_REACH`), и под ним идти можно.
-   */
+  /** Замеры, где тело идущего входит в чужое тело. */
+  hits: number;
+  /** Их доля, проценты. */
+  hitShare: number;
+  /** Замеры, над которыми низко висит другой ярус ленты. */
   covered: number;
   /** Длина ломаной по земле, юниты. */
   length: number;
 };
 
-/**
- * Проверка ломаной по ленте: провал, свисание, разрывы.
- *
- * Меряется не по узлам, а шагом вдоль звеньев: беды сидят между узлами — там,
- * где хорда срезает выпуклый гребень или поворот.
- */
+/** Проверка ломаной по ленте: провал, свисание, разрывы. */
 export function auditRoute(
   ribbon: Ribbon,
   route: readonly Point3[],
@@ -629,6 +522,8 @@ export function auditRoute(
     footOffShare: 0,
     gaps: 0,
     touches: 0,
+    hits: 0,
+    hitShare: 0,
     covered: 0,
     length: 0,
   };
@@ -649,6 +544,7 @@ export function auditRoute(
       const y = from[1] + (to[1] - from[1]) * part;
       report.samples++;
       if (options.blocked?.(x, z) != null) report.touches++;
+      if (bodyAt(options, x, z, y) !== null) report.hits++;
 
       const under = ribbon.levelAt(x, z, y, options.tolerance);
       if (under === null) {
@@ -672,6 +568,7 @@ export function auditRoute(
 
   report.footOffShare =
     report.samples > 0 ? (100 * report.footOff) / report.samples : 0;
+  report.hitShare = report.samples > 0 ? (100 * report.hits) / report.samples : 0;
   return report;
 }
 
@@ -689,17 +586,13 @@ export type Baked = {
   report: Audit;
   /** Сколько точек было в плотной выборке до упрощения. */
   dense: number;
+  /** Сколько точек плотной выборки осталось в чужом теле. */
+  denseHits: number;
+  /** Сама плотная выборка: по ней видно, где обход есть, а где его срезали. */
+  samples: Point3[];
 };
 
-/**
- * Заново прокладывает маршрут по ленте, оставляя его там же, где он был.
- *
- * Порядок: плотная выборка с центровкой → заполнение разрывов → сглаживание →
- * упрощение → починка. Починка тут не украшение: упрощение меряет отклонение
- * от плотной выборки, а не от ленты, и на повороте хорда, законная по допуску,
- * всё-таки уводит ногу на траву. Такие места возвращают выброшенную точку — и
- * так, пока замер не станет чистым или не кончатся попытки.
- */
+/** Заново прокладывает маршрут по ленте, оставляя его там же, где он был. */
 export function bakeRoute(
   ribbon: Ribbon,
   route: readonly Point3[],
@@ -722,20 +615,29 @@ export function bakeRoute(
     return [round(sample.x), round(sample.y), round(sample.z)];
   });
 
+  let denseHits = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const previous = samples[i - 1]!;
+    const sample = samples[i]!;
+    const [nx, nz] = normalOf(
+      [previous.x, previous.y, previous.z],
+      [sample.x, sample.y, sample.z],
+    );
+    if (blockedNear(options, sample.x, sample.z, nx, nz, sample.y)) denseHits++;
+  }
+
   return {
     route: line,
     report: auditRoute(ribbon, line, options),
     dense: samples.length,
+    denseHits,
+    samples: samples.map(({ x, y, z }) => [round(x), round(y), round(z)]),
   };
 }
 
 /**
  * Точка плотной выборки, возвращение которой чинит худшее звено, или `null`,
  * если чинить нечего.
- *
- * Звено считается больным, если на нём идущий проваливается под ленту или
- * свисает с неё ногой там, где плотная выборка стояла на ленте обеими. Разрывы
- * ленты больными не считаются: там ленты нет ни у кого.
  */
 function worstSpan(
   ribbon: Ribbon,
@@ -759,8 +661,6 @@ function worstSpan(
       const inner = samples[k]!;
       if (!inner.onRibbon) continue;
 
-      // Место идущего на хорде против его места в плотной выборке: доля пути
-      // считается по земле, высота — линейно по звену.
       const gap = offChord(start, end, inner);
       const part = (k - from) / (to - from);
       const x = start.x + (end.x - start.x) * part;
@@ -774,10 +674,9 @@ function worstSpan(
 
       const sink = under === null ? 0 : Math.max(under - y, 0);
       const loose = under === null || left === null || right === null;
-      // Хорда, срезающая обход, — такая же беда, как хорда, срезающая склон.
       const caught =
-        blockedNear(options, x, z, nz, -nx) &&
-        !blockedNear(options, inner.x, inner.z, nz, -nx);
+        blockedNear(options, x, z, nx, nz, y) &&
+        !blockedNear(options, inner.x, inner.z, nx, nz, inner.y);
       const score = loose || caught ? 1 + gap.across : sink / options.keepY;
       if (score > worst && score > 1) {
         worst = score;
@@ -808,20 +707,15 @@ export type PatrolTools = {
   ) => Record<string, Baked>;
 };
 
-/**
- * Допуск, по которому маршрут признаётся пешим.
- *
- * Щедрее рабочего (0,15): маршрут, который и надо чинить, местами отстоит от
- * ленты на полроста — и по строгому допуску сам себя объявил бы летящим.
- */
+/** Допуск, по которому маршрут признаётся пешим. */
 const ON_ROUTE_TOLERANCE = 0.5;
 
 export type PatrolToolsOptions = {
   scene: THREE.Object3D;
   /** Имя материала ленты. Вынесено ради тестов и правок карты. */
   material?: string;
-  /** След инстансов: его даёт `dev-crowd.ts` через `scene.ts`. */
-  blocked?: (x: number, z: number) => string | null;
+  /** Что занимает место: след инстансов из `dev-crowd.ts`, уточнённый телом. */
+  blocked?: (x: number, z: number, low?: number, high?: number) => string | null;
 };
 
 export function createPatrolTools({
@@ -838,12 +732,6 @@ export function createPatrolTools({
     ...options,
   });
 
-  /*
-   * Летящие в разбор не идут: у дракона под маршрутом нет ленты, и центровка
-   * по ней утащила бы его круг на ближайшую дорогу. Признак не в модели и не в
-   * имени, а в самом маршруте: пеший идёт по ленте, и она есть под большей
-   * частью его точек.
-   */
   const walking = (list: readonly WorldPatrol[]): readonly WorldPatrol[] => {
     const map = ribbon();
     return list.filter((patrol) => {
@@ -860,16 +748,29 @@ export function createPatrolTools({
       const map = ribbon();
       const report: Record<string, Audit> = {};
       for (const patrol of walking(list)) {
-        report[patrol.id] = auditRoute(map, patrol.route, settings());
+        report[patrol.id] = auditRoute(
+          map,
+          patrol.route,
+          settings({ figureHeight: patrol.height }),
+        );
       }
       return report;
     },
-    bake: (patrol, options) => bakeRoute(ribbon(), patrol.route, settings(options)),
+    bake: (patrol, options) =>
+      bakeRoute(
+        ribbon(),
+        patrol.route,
+        settings({ figureHeight: patrol.height, ...options }),
+      ),
     bakeAll: (list, options) => {
       const map = ribbon();
       const baked: Record<string, Baked> = {};
       for (const patrol of walking(list)) {
-        baked[patrol.id] = bakeRoute(map, patrol.route, settings(options));
+        baked[patrol.id] = bakeRoute(
+          map,
+          patrol.route,
+          settings({ figureHeight: patrol.height, ...options }),
+        );
       }
       return baked;
     },

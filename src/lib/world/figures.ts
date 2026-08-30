@@ -1,25 +1,4 @@
-/**
- * Фигуры: первый скиннинг в этом мире.
- *
- * Одна модель — один загруженный glTF; каждая фигура на карте — его клон через
- * `SkeletonUtils.clone` (обычный `Object3D.clone` рвёт связь меша со скелетом,
- * и клон анимируется костями оригинала). Геометрию и материалы клоны делят,
- * поэтому цена фигуры — draw call и пересчёт 41 кости, а не копия меша.
- *
- * Скиннинг не инстансируется: `InstancedMesh` умеет только статичную геометрию.
- * Поэтому фигуры дороги по сравнению со всем остальным в этой сцене, где 8968
- * объектов живут в 106 вызовах отрисовки. Отсюда два ограничителя:
- *
- * 1. `ANIMATION_RANGE` — дальше этого расстояния миксер не крутится. Фигура
- *    высотой 0,08 юнита с шести юнитов занимает меньше десятка пикселей, и
- *    разницы между шагом и стойкой там нет.
- * 2. Пирамида видимости — за кадром миксер тоже стоит. Отрисовку три отсекает
- *    сама, но пересчёт костей идёт до неё и от отсечения не зависит.
- *
- * Высота задаётся в юнитах мира, а не множителем масштаба: у карты нет честного
- * метра (дерево 0,28 юнита, надгробие 0,3, горшок 0,0765), и множитель к
- * авторской модели ни о чём не говорил бы.
- */
+/** Фигуры: первый скиннинг в этом мире. */
 
 import * as THREE from 'three';
 import type { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -43,41 +22,23 @@ import {
   type WorldBattle,
 } from './battle';
 import { walkerStep } from './patrol';
+import { routinePose } from './routine';
 import { createSpells } from './spells';
 
 /** Дальше этого расстояния до камеры анимация не считается. */
 export const ANIMATION_RANGE = 6;
 
-/**
- * Дальше этого расстояния фигура не рисуется вовсе.
- *
- * Фигура ростом 0,117 юнита с восьми юнитов занимает меньше десяти пикселей —
- * различить в ней человека нельзя, а стоит она дорого: у скелета KayKit десять
- * мешей, и каждый идёт своим вызовом отрисовки. Замер на сотне фигур с общего
- * плана: 734 вызова без них, 1896 со всеми, 800 с этим отсечением.
- */
+/** Дальше этого расстояния фигура не рисуется вовсе. */
 export const DRAW_RANGE = 8;
 
-/**
- * Во сколько своих ростов фигура остаётся видна.
- *
- * Восемь юнитов — предел для человека ростом 0,117: дальше он меньше десяти
- * пикселей. Дракону размахом в полюнита это правило не годится — его силуэт
- * читается через полкарты, и гасить его на восьми юнитах значит потерять
- * единственное, ради чего он там летает.
- */
+/** Во сколько своих ростов фигура остаётся видна. */
 const RANGE_IN_HEIGHTS = 70;
 
 /** Дальность видимости фигуры по её росту. */
 const drawRange = (height: number): number =>
   Math.max(DRAW_RANGE, height * RANGE_IN_HEIGHTS);
 
-/**
- * За сколько боец меняет позу, секунды.
- *
- * Две десятых: щит успевает опуститься в выпад, но удар не размазывается. Без
- * перехода вовсе размен читается как перемотка — поза скачет через кадр.
- */
+/** За сколько боец меняет позу, секунды. */
 const POSE_FADE = 0.2;
 
 /** Шаг прохода луча по земле и предел его дальности, в юнитах мира. */
@@ -112,13 +73,6 @@ export type Figures = {
 
 /**
  * Где луч встречает землю.
- *
- * Не рейкастом по геометрии: один такой по этой карте стоит около 110 мс
- * (замер в `map-shell.ts`). Идём вдоль луча шагами и спрашиваем высоту у
- * той же сетки, что держит камеру, — это поиск по таблице. Место касания
- * уточняем делением отрезка пополам: шаг в 5 сантиметров сам по себе оставил
- * бы фигуру висеть или тонуть на неровном склоне.
- *
  * @param heightAt высота земли в точке или `null` за краем карты
  */
 export function traceGround(
@@ -133,7 +87,6 @@ export function traceGround(
     return ground === null ? null : point.y <= ground;
   };
 
-  // Луч из-под земли — не промах, а несостоятельный вопрос: сверху ставим.
   if (under(0) !== false) return null;
 
   let previous = 0;
@@ -203,18 +156,26 @@ type Placed = {
   figure: WorldFigure;
   root: THREE.Object3D;
   mixer: THREE.AnimationMixer;
+  /** Откуда брать клипы: у каждой модели свой набор. */
+  gltf: GLTF;
   /** Габаритная сфера в мировых координатах: по ней решается, крутить ли кости. */
   bounds: THREE.Sphere;
+  /** Что играется сейчас. Меняется — значит нужен переход. */
+  pose: Pose | null;
+  action: THREE.AnimationAction | null;
   /** Замерла в первой позе: повторно ставить её незачем. */
   resting: boolean;
 };
 
-/**
- * Клип по имени, а если модель его не знает — стойка.
- *
- * Наборы клипов у нежити и у живых разные (`Taunt` есть только у скелетов,
- * `Cheer` — только у людей). Без замены модель осталась бы в T-позе.
- */
+/** Всё, что нужно, чтобы сменить позу: миксер, набор клипов и то, что играется. */
+type Posed = {
+  mixer: THREE.AnimationMixer;
+  gltf: GLTF;
+  pose: Pose | null;
+  action: THREE.AnimationAction | null;
+};
+
+/** Клип по имени, а если модель его не знает — стойка. */
 function clipFor(gltf: GLTF, name: string): THREE.AnimationClip | null {
   return (
     THREE.AnimationClip.findByName(gltf.animations, name) ??
@@ -239,11 +200,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
   const walkers: Walker[] = [];
   const warriors: Warrior[] = [];
   let battles: readonly WorldBattle[] = [];
-  /*
-   * Снаряды магов. Заводятся сразу, а не вместе со стычками: спрайтов до
-   * первого выстрела не появляется, а проверять «есть ли уже набор» на каждом
-   * кадре дороже, чем держать пустую группу.
-   */
   const spells = createSpells(object);
   /** Общее время хода дозоров. Растёт только когда мир не в покое. */
   let marching = 0;
@@ -259,8 +215,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
 
   function clear() {
     for (const item of placed) {
-      // Миксер держит ссылки на корень и клипы: без `uncacheRoot` снятая
-      // фигура остаётся в его внутренней таблице до конца жизни сцены.
       item.mixer.stopAllAction();
       item.mixer.uncacheRoot(item.root);
       object.remove(item.root);
@@ -276,8 +230,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
     }
     warriors.length = 0;
     battles = [];
-    // Снаряды снимаются вместе с бойцами: без этого последний залп остаётся
-    // висеть в воздухе над опустевшей поляной.
     spells.update([]);
   }
 
@@ -300,8 +252,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
   async function show(list: readonly WorldFigure[]) {
     const mine = ++generation;
 
-    // Модели ждём до снятия прежнего набора: иначе на время загрузки в мире
-    // не остаётся ни одной фигуры, и подбор мигает на каждое касание.
     const loaded = new Map<FigureModel, GLTF>();
     for (const model of new Set(list.map((figure) => figure.model))) {
       loaded.set(model, await load(model));
@@ -319,24 +269,15 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
       root.position.set(figure.at[0], figure.at[1], figure.at[2]);
       root.rotation.y = figure.turn;
       root.name = figure.id;
-      /*
-       * Тени фигуры не отбрасывают. Тень скелета в этом масштабе — три пикселя
-       * под ногами, а теневой проход рисует его вторым заходом: замер на сотне
-       * дал 3696 вызовов отрисовки против 1896 без теней.
-       */
       root.traverse((child) => {
         child.castShadow = false;
       });
 
-      const mixer = new THREE.AnimationMixer(root);
-      const clip = clipFor(gltf, figure.clip);
-      if (clip) mixer.clipAction(clip).play();
-
-      object.add(root);
-      placed.push({
+      const item: Placed = {
         figure,
         root,
-        mixer,
+        mixer: new THREE.AnimationMixer(root),
+        gltf,
         bounds: new THREE.Sphere(
           new THREE.Vector3(
             figure.at[0],
@@ -345,8 +286,15 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
           ),
           figure.height,
         ),
+        pose: null,
+        action: null,
         resting: false,
-      });
+      };
+
+      applyPose(item, routinePose(figure, marching));
+
+      object.add(root);
+      placed.push(item);
     }
   }
 
@@ -380,7 +328,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
         const mixer = new THREE.AnimationMixer(root);
         if (clip) {
           const action = mixer.clipAction(clip);
-          // Сдвиг фазы: иначе тройка шагает с точностью до кадра, как заводная.
           action.time = (index * clip.duration) / patrol.walkers;
           action.play();
         }
@@ -397,21 +344,12 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
       }
     }
 
-    // Сразу расставить по местам: до первого кадра они иначе стоят в начале
-    // координат — то есть в углу карты под водой.
     advance(0);
   }
 
-  /**
-   * Ставит бойцу новую позу.
-   *
-   * Переход, а не подмена: щит опускается в выпад за две десятых секунды, и без
-   * этого размен выглядит перемоткой. Одноразовый клип (падение) застывает в
-   * последнем кадре, а `reverse` пускает его назад — так падение становится
-   * подъёмом, и живому не нужен клип вставания, которого у него нет.
-   */
-  function applyPose(warrior: Warrior, pose: Pose) {
-    const held = warrior.pose;
+  /** Ставит новую позу бойцу или одиночке. */
+  function applyPose(item: Posed, pose: Pose) {
+    const held = item.pose;
     if (
       held &&
       held.clip === pose.clip &&
@@ -421,10 +359,10 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
       return;
     }
 
-    const clip = clipFor(warrior.gltf, pose.clip);
+    const clip = clipFor(item.gltf, pose.clip);
     if (!clip) return;
 
-    const next = warrior.mixer.clipAction(clip);
+    const next = item.mixer.clipAction(clip);
     next.reset();
     next.setEffectiveWeight(1);
 
@@ -445,11 +383,11 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
 
     next.play();
 
-    const previous = warrior.action;
+    const previous = item.action;
     if (previous && previous !== next) previous.crossFadeTo(next, POSE_FADE, false);
 
-    warrior.pose = pose;
-    warrior.action = next;
+    item.pose = pose;
+    item.action = next;
   }
 
   /** Свой счётчик поколений: стычки перестраиваются отдельно от прочих. */
@@ -471,8 +409,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
     battles = list;
 
     for (const battle of list) {
-      // Сфера одна на всю площадку: бойцы ходят внутри неё, а решение
-      // «крутить ли кости» принимается на всю стычку разом.
       const reach = battleRadius(battle);
 
       for (const fighter of battleFighters(battle)) {
@@ -506,7 +442,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
       }
     }
 
-    // Сразу расставить: до первого кадра бойцы иначе стоят в начале координат.
     advanceBattles();
   }
 
@@ -562,8 +497,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
     frustum.setFromProjectionMatrix(projection);
 
     for (const item of placed) {
-      // Замереть надо в позе, а не там, где застало: остановленный на середине
-      // шага скелет читается как сломанный, а не как неподвижный.
       if (calm) {
         item.root.visible =
           item.bounds.center.distanceTo(eye) < drawRange(item.figure.height);
@@ -580,11 +513,11 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
       if (away > ANIMATION_RANGE) continue;
       if (!frustum.intersectsSphere(item.bounds)) continue;
 
+      applyPose(item, routinePose(item.figure, marching));
+
       item.mixer.update(delta);
     }
 
-    // Дозоры идут всегда, пока мир не в покое: замри они за спиной у камеры,
-    // обернувшийся увидел бы их ровно там, где оставил час назад.
     if (!calm) advance(delta);
 
     for (const walker of walkers) {
@@ -606,11 +539,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
     }
 
     for (const warrior of warriors) {
-      /*
-       * В покое стычка замирает в позе, а не посреди выпада: остановленный на
-       * середине шага скелет читается как сломанный. Место при этом остаётся
-       * тем, где его застало, — двигать бойцов в покое нельзя, это движение.
-       */
       if (calm) {
         if (!warrior.resting) {
           warrior.mixer.setTime(0);
@@ -640,15 +568,11 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
     patrols: () => [...new Set(walkers.map((walker) => walker.patrol))],
     battles: () => battles,
     pick: (raycaster: THREE.Raycaster) => {
-      // Мировые матрицы фигур обновляет отрисовка. Пока мир на паузе или
-      // вкладка скрыта, кадров нет — и луч искал бы фигуры там, где их уже
-      // нет. Десяток узлов на фигуру: пересчитать дешевле, чем промахнуться.
       object.updateMatrixWorld(true);
 
       const hit = raycaster.intersectObject(object, true)[0];
       if (!hit) return null;
 
-      // Луч попадает в часть тела; имя фигуры носит только её корень.
       let node: THREE.Object3D | null = hit.object;
       while (node && node.parent !== object) node = node.parent;
       return node?.name ?? null;
@@ -660,8 +584,6 @@ export function createFigures({ loader, reducedMotion }: FiguresOptions): Figure
       spells.dispose();
       object.removeFromParent();
 
-      // Клоны делят геометрию и материалы с загруженной моделью, и общий обход
-      // сцены до них уже не дойдёт — снимаем сами, по одному разу на модель.
       for (const request of models.values()) {
         void request.then((gltf) => {
           gltf.scene.traverse((child) => {

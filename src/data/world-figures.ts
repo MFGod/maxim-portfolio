@@ -1,18 +1,6 @@
 import { deepFreeze } from '@/lib/freeze';
 
-/**
- * Фигуры мира: кто где стоит.
- *
- * Расстановка — данные, а не код в сцене (решение D4): координаты подбираются
- * вживую инструментом `window.__world.figures`, выгружаются им же готовым
- * куском и вставляются сюда. Тест сверяет каждую запись, чтобы опечатка в
- * координате не всплыла кадром в проде.
- *
- * Модели — CC0 из наборов KayKit (Kay Lousberg): четыре скелета (воин,
- * разбойник, маг, миньон) и четверо живых (рыцарь, варвар, разбойник, маг).
- * Каждая обрезана до пяти-шести анимаций и весит 230–280 КБ. Все восемь сидят
- * на одном риге в 41 кость и делят один атлас — смешивать их ничего не стоит.
- */
+/** Фигуры мира: кто где стоит. */
 
 /** Файлы моделей. Ключ — то, что пишется в `model` у фигуры. */
 export const FIGURE_MODELS = {
@@ -34,17 +22,8 @@ export type FigureModel = keyof typeof FIGURE_MODELS;
 /**
  * Анимации, оставленные в моделях. Остальные вырезаны: у скелета они весили
  * 4,4 МБ из 4,64, а миру нужны стойка, шаг и пара поз на месте.
- *
- * Десять поз общие у людей и у нежити, три — только у скелетов, две — у
- * дракона. Тип общий на всех, а `figures.ts` подставляет `Idle`, если модель
- * запрошенного клипа не знает: иначе фигура застывает в T-позе.
- *
- * Отдельный набор KayKit Character Animations на 133 клипа не качался: те же
- * клипы уже лежат в самих моделях (у скелета их 95, у человека 76), и вопрос
- * был только в том, сколько оставить при обрезке.
  */
 export const FIGURE_CLIPS = [
-  // Есть у всех людей и у нежити.
   'Idle',
   'Walking_A',
   'Cheer',
@@ -55,11 +34,9 @@ export const FIGURE_CLIPS = [
   'Blocking',
   'Spellcasting',
   'Death_A_Pose',
-  // Только у нежити.
   'Taunt',
   'Skeleton_Inactive_Standing_Pose',
   'Skeletons_Awaken_Standing',
-  // Только у драконов.
   'Dragon_Flying',
   'Dragon_Attack',
   'Fast_Flying',
@@ -76,10 +53,23 @@ export type FigureClip = (typeof FIGURE_CLIPS)[number];
 export const MIN_FIGURE_HEIGHT = 0.02;
 export const MAX_FIGURE_HEIGHT = 0.4;
 
+/** Чем занято место, где стоит фигура. */
+export type FigureRole =
+  /** Дозорный на башне. */
+  | 'tower'
+  /** Стража у входа в пещеру или катакомбы. */
+  | 'gate'
+  /** Обитатель замка и его окрестностей. */
+  | 'castle'
+  /** Человек у костра. */
+  | 'camp';
+
 export type WorldFigure = {
   /** Своё имя. Должно быть уникальным: по нему фигура ищется в инструменте. */
   id: string;
+  role: FigureRole;
   model: FigureModel;
+  /** Основное занятие: поза, в которой фигура стоит большую часть времени. */
   clip: FigureClip;
   /** Точка в мировых координатах: X, Y, Z. Y — где стоят ступни. */
   at: readonly [number, number, number];
@@ -89,115 +79,27 @@ export type WorldFigure = {
   height: number;
 };
 
-/**
- * Одиночки: дозорные на башнях и стража у пещер.
- *
- * Башни — `mage_tower`, три штуки, разнесённые по карте; высота верхушки снята
- * лучом сверху по постройкам (`dropAt(x, z, 'props')`).
- * Пещеры — входы `dungeon`; у каждого по паре, смотрят друг на друга поперёк
- * входа. Из тридцати шести входов выбраны два, у которых площадка по обе
- * стороны ровная: у остальных перепад доходит до половины юнита, и пара стояла
- * бы на разной высоте.
- *
- * Рост 0,117 — не выдуманный: столько у людей, которых автор карты уже
- * расставил по миру (материал `Person 1`).
- *
- * Идущие группы живут отдельно, в `world-patrols.ts`.
- */
-/**
- * Одиночки мира: дозорные на башнях, стража у входов и люди у костров.
- *
- * Расстановка снята с самой карты, а не придумана: башни — это все двенадцать
- * `mage_tower`, входы — `dungeon` и `catacombs`, лагеря — костры
- * `firestand`. Для каждой точки проверено три вещи: земля под ногами (луч
- * сверху по геометрии, а не сетка оболочки — та висит над рельефом), свободное
- * место (след ближайшего инстанса, иначе фигура стоит внутри телеги) и ровность
- * площадки для пары у входа — иначе стражи стоят на разной высоте.
- *
- * Рост 0,117 — как у людей, которых автор карты расставил сам (`Person 1`).
- *
- * Идущие группы живут отдельно, в `world-patrols.ts`.
- */
-/**
- * Одиночки мира: дозорные на башнях, стража у входов и люди у костров.
- *
- * Расстановка снята с самой карты, а не придумана: башни — это все двенадцать
- * `mage_tower`, входы — `dungeon` и `catacombs`, лагеря — костры
- * `firestand`. Для каждой точки проверено три вещи: земля под ногами (луч
- * сверху по геометрии, а не сетка оболочки — та висит над рельефом), свободное
- * место (след ближайшего инстанса, иначе фигура стоит внутри телеги) и ровность
- * площадки для пары у входа — иначе стражи стоят на разной высоте.
- *
- * Рост 0,117 — как у людей, которых автор карты расставил сам (`Person 1`).
- *
- * Идущие группы живут отдельно, в `world-patrols.ts`.
- */
+/** Одиночки: дозорные на башнях и стража у пещер. */
+/** Одиночки мира: дозорные на башнях, стража у входов и люди у костров. */
+/** Одиночки мира: дозорные на башнях, стража у входов и люди у костров. */
 /**
  * Население мира: дозорные на башнях, стража у входов, люди в лагерях и у
  * построек. Сто сорок фигур, расставленных по самой карте, а не на глаз.
- *
- * Точки взяты у авторских объектов: башни — все двенадцать `mage_tower`;
- * входы — `dungeon`, `catacombs`, `hero_grave`, `evergaol`; лагеря —
- * костры и палатки; замки — дома, церкви, беседки, мавзолеи, башни Халигдрева.
- *
- * Каждая точка проверена тремя замерами:
- *
- * 1. **Земля — верхнее попадание луча по рельефу.** Не сетка оболочки: та
- *    висит над рельефом (медиана 0,65 по замеру автора карты). И не «ярус,
- *    ближайший к оценке сетки»: у террас он промахивается мимо видимой
- *    поверхности, и фигура уходила в склон на три юнита.
- * 2. **Свободное место.** След ближайшего инстанса (7625 объектов, круг в 0,45
- *    габарита) — иначе страж стоит внутри телеги.
- * 3. **Ровность площадки** для пары у входа: перепад между стражами больше
- *    четырёх сантиметров — вход пропускается.
- *
- * Рост 0,117 — как у людей, которых автор карты расставил сам (`Person 1`).
- *
- * Идущие группы живут отдельно, в `world-patrols.ts`.
  */
 /**
  * Население мира: дозорные на башнях, стража у входов, люди в лагерях и у
  * построек. Сто двадцать пять фигур, снятых с самой карты, а не расставленных
  * на глаз. Идущие группы живут отдельно, в \`world-patrols.ts\`.
- *
- * Точки берутся у авторских объектов: \`mage_tower\` — башни; \`dungeon\`,
- * \`catacombs\`, \`hero_grave\`, \`evergaol\` — входы; костры и палатки —
- * лагеря; дома, церкви, беседки, мавзолеи, Божественные башни — замки.
- *
- * Каждую точку проверяет \`dev-crowd.ts\` тремя замерами: земля по верхнему
- * попаданию луча (сетка оболочки висит над рельефом, а «ярус ближе к её
- * оценке» у террас промахивается и топит фигуру), свободное место по следу
- * инстансов и ровность площадки под ногами.
- *
- * У входа стража стоит парой, когда по обе стороны ровно, и одиночкой, когда
- * вход врезан в склон: из 66 входов пар нашлось четыре.
- *
- * Рост 0,117 — как у людей, которых автор карты расставил сам (\`Person 1\`).
  */
 /**
  * Население мира: дозорные на башнях, стража у входов, люди в лагерях и у
  * построек. Точки сняты с карты инструментом \`dev-crowd.ts\`, который
  * проверяет каждую пятью замерами:
- *
- * 1. **Земля — верх рельефа** (луч сверху). Сетка оболочки висит над рельефом,
- *    а «ярус ближе к её оценке» у террас промахивается и топит фигуру.
- * 2. **Место свободно** — след ближайшего инстанса.
- * 3. **Площадка ровная** — рельеф вокруг не поднимается выше роста.
- * 4. **Это ходовая земля, а не крыша.** Замки в карте — часть рельефа, и без
- *    этой проверки фигура забиралась на шпиль.
- * 5. **Вокруг открыто** — минимум пять румбов из восьми. Иначе фигура стоит в
- *    нише лицом в стену. Направление взгляда берётся оттуда же: в самую
- *    открытую сторону, а не «на объект, у которого поставили».
- *
- * Поза выбирается по месту, а не случайно: на башнях стоят и колдуют, у входов
- * держат щит, в лагерях сидят у костра, у построек несут службу.
- *
- * Рост 0,117 — как у людей, которых автор карты расставил сам (\`Person 1\`).
- * Идущие группы и драконы живут отдельно, в \`world-patrols.ts\`.
  */
 export const worldFigures: WorldFigure[] = deepFreeze([
   {
     id: 'башня-1',
+    role: 'tower',
     model: 'skeleton_mage',
     clip: 'Spellcasting',
     at: [-1.51, 1.229, 21.773],
@@ -206,6 +108,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-2',
+    role: 'tower',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [19.546, 1.83, -1.299],
@@ -214,6 +117,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-3',
+    role: 'tower',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-33.584, 2.561, -6.074],
@@ -222,6 +126,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-4',
+    role: 'tower',
     model: 'skeleton_mage',
     clip: 'Spellcasting',
     at: [-35.128, 2.851, 0.777],
@@ -230,6 +135,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-5',
+    role: 'tower',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-30.765, 2.225, -19.503],
@@ -238,6 +144,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-6',
+    role: 'tower',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-18.851, 3.12, -22.632],
@@ -246,6 +153,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-7',
+    role: 'tower',
     model: 'skeleton_mage',
     clip: 'Spellcasting',
     at: [-31.161, 3.78, -29.464],
@@ -254,6 +162,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-8',
+    role: 'tower',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-31.564, 3.582, -26.638],
@@ -262,6 +171,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-9',
+    role: 'tower',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-32.13, 3.854, -27.964],
@@ -270,6 +180,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-10',
+    role: 'tower',
     model: 'skeleton_mage',
     clip: 'Spellcasting',
     at: [-16.441, 6.502, -35.142],
@@ -278,6 +189,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-11',
+    role: 'tower',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [20.712, 11.988, -46.613],
@@ -286,6 +198,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'башня-12',
+    role: 'tower',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [12.136, 9.192, -43.531],
@@ -294,6 +207,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-1-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Taunt',
     at: [-5.631, 1.23, 3.398],
@@ -302,6 +216,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-2-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-10.19, 1.239, 10.57],
@@ -310,6 +225,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-3-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-5.471, 1.045, 9.455],
@@ -318,6 +234,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-4-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Taunt',
     at: [-11.682, 1.018, 13.538],
@@ -326,6 +243,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-5-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-7.643, 0.749, 10.461],
@@ -334,6 +252,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-6-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [1.66, 1.413, 3.56],
@@ -342,6 +261,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-7-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Taunt',
     at: [3.506, 1.442, 6.977],
@@ -350,6 +270,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-8-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Blocking',
     at: [-7.425, 0.867, 14.547],
@@ -358,6 +279,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-8-2',
+    role: 'gate',
     model: 'skeleton_minion',
     clip: 'Blocking',
     at: [-7.591, 0.126, 14.596],
@@ -366,6 +288,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-9-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-12.04, 0.312, 15.67],
@@ -374,6 +297,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-10-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Taunt',
     at: [-10.331, 0.536, 20.937],
@@ -382,6 +306,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-11-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-8.056, 8.088, -27.679],
@@ -390,6 +315,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-12-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Blocking',
     at: [-23.873, 6.647, -37.338],
@@ -398,6 +324,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-12-2',
+    role: 'gate',
     model: 'skeleton_minion',
     clip: 'Blocking',
     at: [-24.105, 6.647, -37.361],
@@ -406,6 +333,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-13-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Blocking',
     at: [-23.795, 8.293, -40.45],
@@ -414,6 +342,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-13-2',
+    role: 'gate',
     model: 'skeleton_minion',
     clip: 'Blocking',
     at: [-23.967, 8.293, -40.664],
@@ -422,6 +351,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-14-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [21.6, 11.382, -46.258],
@@ -430,6 +360,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-15-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [13.233, 8.989, -44.809],
@@ -438,6 +369,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-16-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Taunt',
     at: [5.68, 8.882, -40.72],
@@ -446,6 +378,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-17-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Blocking',
     at: [-5.38, 1.045, 6.6],
@@ -454,6 +387,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-17-2',
+    role: 'gate',
     model: 'skeleton_minion',
     clip: 'Blocking',
     at: [-5.38, 1.044, 6.32],
@@ -462,6 +396,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-18-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Idle',
     at: [-7.22, 1.764, 3.93],
@@ -470,6 +405,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'вход-19-1',
+    role: 'gate',
     model: 'skeleton_warrior',
     clip: 'Taunt',
     at: [-11.18, 1.736, 10.28],
@@ -478,6 +414,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-1',
+    role: 'camp',
     model: 'rogue',
     clip: 'Sit_Floor_Idle',
     at: [-8.145, 1.024, 9.282],
@@ -486,6 +423,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-2',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Sit_Floor_Idle',
     at: [-5.789, 1.024, 11.127],
@@ -494,6 +432,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-3',
+    role: 'camp',
     model: 'knight',
     clip: 'Idle',
     at: [-11.861, 2.021, 7.04],
@@ -502,6 +441,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-4',
+    role: 'camp',
     model: 'mage',
     clip: 'Sit_Floor_Idle',
     at: [-5.949, 1.02, 8.378],
@@ -510,6 +450,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-5',
+    role: 'camp',
     model: 'rogue',
     clip: 'Cheer',
     at: [-9.66, 0.825, 24.84],
@@ -518,6 +459,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-6',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Idle',
     at: [-4.742, 1.105, 21.67],
@@ -526,6 +468,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-7',
+    role: 'camp',
     model: 'rogue',
     clip: 'Sit_Floor_Idle',
     at: [-5.409, 0.829, 23.159],
@@ -534,6 +477,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-8',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Sit_Floor_Idle',
     at: [-2.792, 0.559, 20.568],
@@ -542,6 +486,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-9',
+    role: 'camp',
     model: 'knight',
     clip: 'Idle',
     at: [-5.659, 1.478, 27.548],
@@ -550,6 +495,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-10',
+    role: 'camp',
     model: 'mage',
     clip: 'Sit_Floor_Idle',
     at: [-6.118, 1.441, 28.41],
@@ -558,6 +504,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-11',
+    role: 'camp',
     model: 'rogue',
     clip: 'Cheer',
     at: [16.05, 2.438, 3.15],
@@ -566,6 +513,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-12',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Idle',
     at: [3.053, 1.766, 2.243],
@@ -574,6 +522,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-13',
+    role: 'camp',
     model: 'rogue',
     clip: 'Sit_Floor_Idle',
     at: [7.108, 2.046, -0.476],
@@ -582,6 +531,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-14',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Sit_Floor_Idle',
     at: [16.175, 0.911, 14.185],
@@ -590,6 +540,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-15',
+    role: 'camp',
     model: 'knight',
     clip: 'Idle',
     at: [16.714, 0.911, 13.537],
@@ -598,6 +549,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-16',
+    role: 'camp',
     model: 'mage',
     clip: 'Sit_Floor_Idle',
     at: [17.439, 1.021, 14.235],
@@ -606,6 +558,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-17',
+    role: 'camp',
     model: 'rogue',
     clip: 'Cheer',
     at: [17.709, 1.206, 12.575],
@@ -614,6 +567,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-18',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Idle',
     at: [-19.236, 2.404, -2.502],
@@ -622,6 +576,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-19',
+    role: 'camp',
     model: 'rogue',
     clip: 'Sit_Floor_Idle',
     at: [-20.126, 2.244, -2.627],
@@ -630,6 +585,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-20',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Sit_Floor_Idle',
     at: [-19.682, 2.725, -5.301],
@@ -638,6 +594,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-21',
+    role: 'camp',
     model: 'knight',
     clip: 'Idle',
     at: [-24.733, 2.746, -24.434],
@@ -646,6 +603,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-22',
+    role: 'camp',
     model: 'mage',
     clip: 'Sit_Floor_Idle',
     at: [-23.778, 2.868, -24.722],
@@ -654,6 +612,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-23',
+    role: 'camp',
     model: 'rogue',
     clip: 'Cheer',
     at: [-29.25, 4.35, -13.42],
@@ -662,6 +621,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-24',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Idle',
     at: [-30.769, 4.586, -12.742],
@@ -670,6 +630,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-25',
+    role: 'camp',
     model: 'rogue',
     clip: 'Sit_Floor_Idle',
     at: [-18.5, 6.635, -38.518],
@@ -678,6 +639,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-26',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Sit_Floor_Idle',
     at: [-17.953, 6.512, -39.236],
@@ -686,6 +648,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-27',
+    role: 'camp',
     model: 'knight',
     clip: 'Idle',
     at: [-17.087, 6.509, -38.923],
@@ -694,6 +657,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-28',
+    role: 'camp',
     model: 'mage',
     clip: 'Sit_Floor_Idle',
     at: [-17.245, 6.756, -39.192],
@@ -702,6 +666,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-29',
+    role: 'camp',
     model: 'rogue',
     clip: 'Cheer',
     at: [-26.862, 6.209, -31.854],
@@ -710,6 +675,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-30',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Idle',
     at: [-19.559, 6.319, -30.035],
@@ -718,6 +684,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-31',
+    role: 'camp',
     model: 'rogue',
     clip: 'Sit_Floor_Idle',
     at: [-18.41, 6.743, -30.82],
@@ -726,6 +693,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-32',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Sit_Floor_Idle',
     at: [-22.209, 6.713, -32.149],
@@ -734,6 +702,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-33',
+    role: 'camp',
     model: 'knight',
     clip: 'Idle',
     at: [-21.727, 7.006, -33.991],
@@ -742,6 +711,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-34',
+    role: 'camp',
     model: 'mage',
     clip: 'Sit_Floor_Idle',
     at: [-29.856, 7.272, -36.991],
@@ -750,6 +720,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-35',
+    role: 'camp',
     model: 'rogue',
     clip: 'Cheer',
     at: [-24.016, 7.527, -33.966],
@@ -758,6 +729,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-36',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Idle',
     at: [-20.761, 6.797, -38.547],
@@ -766,6 +738,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-37',
+    role: 'camp',
     model: 'rogue',
     clip: 'Sit_Floor_Idle',
     at: [3.1, 1.531, 4.15],
@@ -774,6 +747,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-38',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Sit_Floor_Idle',
     at: [4.282, 1.264, 5.924],
@@ -782,6 +756,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-39',
+    role: 'camp',
     model: 'knight',
     clip: 'Idle',
     at: [11.95, 0.611, 14.064],
@@ -790,6 +765,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-40',
+    role: 'camp',
     model: 'mage',
     clip: 'Sit_Floor_Idle',
     at: [16.09, 0.692, 12.81],
@@ -798,6 +774,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-41',
+    role: 'camp',
     model: 'rogue',
     clip: 'Cheer',
     at: [6.917, 1.264, 4.509],
@@ -806,6 +783,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-42',
+    role: 'camp',
     model: 'barbarian',
     clip: 'Idle',
     at: [-25.878, 2.546, -1.957],
@@ -814,6 +792,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'лагерь-43',
+    role: 'camp',
     model: 'rogue',
     clip: 'Sit_Floor_Idle',
     at: [-21.067, 2.774, -14.25],
@@ -822,14 +801,16 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-1',
+    role: 'castle',
     model: 'knight',
     clip: 'Blocking',
-    at: [12.27, 0.943, 6.599],
+    at: [12.22, 0.934, 6.599],
     turn: 3.142,
     height: 0.117,
   },
   {
     id: 'замок-2',
+    role: 'castle',
     model: 'mage',
     clip: 'Spellcasting',
     at: [11.904, 0.623, 5],
@@ -838,6 +819,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-3',
+    role: 'castle',
     model: 'barbarian',
     clip: 'Idle',
     at: [7.947, 9.316, -46.501],
@@ -846,6 +828,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-4',
+    role: 'castle',
     model: 'knight',
     clip: 'Idle',
     at: [8.669, 9.435, -47.445],
@@ -854,6 +837,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-5',
+    role: 'castle',
     model: 'rogue',
     clip: 'Idle',
     at: [8.2, 9.377, -47.304],
@@ -862,6 +846,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-6',
+    role: 'castle',
     model: 'knight',
     clip: 'Blocking',
     at: [12.351, 0.817, 4.6],
@@ -870,6 +855,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-7',
+    role: 'castle',
     model: 'mage',
     clip: 'Spellcasting',
     at: [9.694, 9.479, -47.018],
@@ -878,6 +864,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-8',
+    role: 'castle',
     model: 'barbarian',
     clip: 'Idle',
     at: [-9.563, 1.393, 13.508],
@@ -886,6 +873,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-9',
+    role: 'castle',
     model: 'knight',
     clip: 'Idle',
     at: [-7.5, 1.116, 17.32],
@@ -894,6 +882,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-10',
+    role: 'castle',
     model: 'rogue',
     clip: 'Idle',
     at: [1.755, 1.657, 2.061],
@@ -902,6 +891,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-11',
+    role: 'castle',
     model: 'knight',
     clip: 'Blocking',
     at: [14.152, 1.502, 5.712],
@@ -910,6 +900,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-12',
+    role: 'castle',
     model: 'mage',
     clip: 'Spellcasting',
     at: [-18.518, 2.686, 2.683],
@@ -918,6 +909,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-13',
+    role: 'castle',
     model: 'barbarian',
     clip: 'Idle',
     at: [-22.7, 3.809, -24.05],
@@ -926,6 +918,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-14',
+    role: 'castle',
     model: 'knight',
     clip: 'Idle',
     at: [-18.093, 6.729, -33.899],
@@ -934,6 +927,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-15',
+    role: 'castle',
     model: 'rogue',
     clip: 'Idle',
     at: [-14.497, 7.942, -31.343],
@@ -942,6 +936,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-16',
+    role: 'castle',
     model: 'knight',
     clip: 'Blocking',
     at: [16.289, 12.874, -35.463],
@@ -950,6 +945,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-17',
+    role: 'castle',
     model: 'mage',
     clip: 'Spellcasting',
     at: [24.738, 11.382, -43.02],
@@ -958,6 +954,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-18',
+    role: 'castle',
     model: 'barbarian',
     clip: 'Idle',
     at: [-22.51, 2.197, -2.98],
@@ -966,6 +963,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-19',
+    role: 'castle',
     model: 'knight',
     clip: 'Idle',
     at: [-20.769, 2.197, -5.222],
@@ -974,6 +972,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-20',
+    role: 'castle',
     model: 'rogue',
     clip: 'Idle',
     at: [-23.125, 2.197, -4.672],
@@ -982,6 +981,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-21',
+    role: 'castle',
     model: 'knight',
     clip: 'Blocking',
     at: [-22.345, 2.211, -8.246],
@@ -990,6 +990,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-22',
+    role: 'castle',
     model: 'mage',
     clip: 'Spellcasting',
     at: [-27.803, 2.197, -7.19],
@@ -998,6 +999,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-23',
+    role: 'castle',
     model: 'barbarian',
     clip: 'Idle',
     at: [-29.862, 2.197, -10.956],
@@ -1006,6 +1008,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-24',
+    role: 'castle',
     model: 'knight',
     clip: 'Idle',
     at: [-32.673, 2.197, -8.984],
@@ -1014,6 +1017,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-25',
+    role: 'castle',
     model: 'rogue',
     clip: 'Idle',
     at: [-25.526, 2.197, -12.997],
@@ -1022,6 +1026,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-26',
+    role: 'castle',
     model: 'knight',
     clip: 'Blocking',
     at: [-32.288, 2.197, -15.831],
@@ -1030,6 +1035,7 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-27',
+    role: 'castle',
     model: 'mage',
     clip: 'Spellcasting',
     at: [-30.114, 2.197, -17.784],
@@ -1038,10 +1044,281 @@ export const worldFigures: WorldFigure[] = deepFreeze([
   },
   {
     id: 'замок-28',
+    role: 'castle',
     model: 'barbarian',
     clip: 'Idle',
     at: [-35.025, 3.138, -1.444],
     turn: 3.142,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-44',
+    role: 'camp',
+    model: 'barbarian',
+    clip: 'Sit_Floor_Idle',
+    at: [-3.52, 1.238, 7.15],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-45',
+    role: 'camp',
+    model: 'rogue',
+    clip: 'Idle',
+    at: [-28.3, 2.428, -11.42],
+    turn: -2.36,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-46',
+    role: 'camp',
+    model: 'knight',
+    clip: 'Sit_Floor_Idle',
+    at: [-18.07, 6.743, -27.71],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-47',
+    role: 'camp',
+    model: 'mage',
+    clip: 'Cheer',
+    at: [-31.19, 3.592, -14.59],
+    turn: -3.14,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-48',
+    role: 'camp',
+    model: 'barbarian',
+    clip: 'Sit_Floor_Idle',
+    at: [-26.47, 9.366, -36.46],
+    turn: -0.79,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-49',
+    role: 'camp',
+    model: 'rogue',
+    clip: 'Idle',
+    at: [-9.12, 1.961, 5.95],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-50',
+    role: 'camp',
+    model: 'knight',
+    clip: 'Sit_Floor_Idle',
+    at: [-27.99, 2.459, -10.54],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-51',
+    role: 'camp',
+    model: 'mage',
+    clip: 'Cheer',
+    at: [-4.43, 0.356, 19.65],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-52',
+    role: 'camp',
+    model: 'barbarian',
+    clip: 'Sit_Floor_Idle',
+    at: [-31.57, 2.462, -22.75],
+    turn: 0.79,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-53',
+    role: 'camp',
+    model: 'rogue',
+    clip: 'Idle',
+    at: [-25.83, 8.98, -35.39],
+    turn: -0.79,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-54',
+    role: 'camp',
+    model: 'knight',
+    clip: 'Sit_Floor_Idle',
+    at: [-22.02, 7.481, -38.06],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-55',
+    role: 'camp',
+    model: 'mage',
+    clip: 'Cheer',
+    at: [-27.65, 8.55, -36.22],
+    turn: 0,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-56',
+    role: 'camp',
+    model: 'barbarian',
+    clip: 'Sit_Floor_Idle',
+    at: [-26.1, 2.544, -24.78],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-57',
+    role: 'camp',
+    model: 'rogue',
+    clip: 'Idle',
+    at: [-21.27, 6.965, -30.23],
+    turn: 0,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-58',
+    role: 'camp',
+    model: 'knight',
+    clip: 'Sit_Floor_Idle',
+    at: [-7.65, 1.748, 5.29],
+    turn: 0,
+    height: 0.117,
+  },
+  {
+    id: 'лагерь-59',
+    role: 'camp',
+    model: 'mage',
+    clip: 'Cheer',
+    at: [-26.93, 8.076, -34.85],
+    turn: 0.79,
+    height: 0.117,
+  },
+  {
+    id: 'вход-20',
+    role: 'gate',
+    model: 'skeleton_warrior',
+    clip: 'Idle',
+    at: [-11.53, 7.577, -29.87],
+    turn: -1.57,
+    height: 0.117,
+  },
+  {
+    id: 'вход-21',
+    role: 'gate',
+    model: 'skeleton_minion',
+    clip: 'Blocking',
+    at: [-24.6, 3.097, -18.84],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'вход-22',
+    role: 'gate',
+    model: 'skeleton_warrior',
+    clip: 'Taunt',
+    at: [-21.51, 4.735, -28.41],
+    turn: -1.57,
+    height: 0.117,
+  },
+  {
+    id: 'вход-23',
+    role: 'gate',
+    model: 'skeleton_minion',
+    clip: 'Idle',
+    at: [10.99, 1.434, 2.64],
+    turn: 0.79,
+    height: 0.117,
+  },
+  {
+    id: 'вход-24',
+    role: 'gate',
+    model: 'skeleton_warrior',
+    clip: 'Idle',
+    at: [-12.34, 6.494, -33.84],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'вход-25',
+    role: 'gate',
+    model: 'skeleton_minion',
+    clip: 'Idle',
+    at: [-22.99, 2.225, -28.18],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'вход-26',
+    role: 'gate',
+    model: 'skeleton_minion',
+    clip: 'Blocking',
+    at: [-7.19, 1.022, 20.35],
+    turn: -2.36,
+    height: 0.117,
+  },
+  {
+    id: 'вход-27',
+    role: 'gate',
+    model: 'skeleton_warrior',
+    clip: 'Idle',
+    at: [-34.65, 2.39, -6.61],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'вход-28',
+    role: 'gate',
+    model: 'skeleton_minion',
+    clip: 'Blocking',
+    at: [0.25, 8.012, -32.78],
+    turn: -1.57,
+    height: 0.117,
+  },
+  {
+    id: 'вход-29',
+    role: 'gate',
+    model: 'skeleton_warrior',
+    clip: 'Idle',
+    at: [-0.62, 0.74, 18.98],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'замок-29',
+    role: 'castle',
+    model: 'knight',
+    clip: 'Idle',
+    at: [-19.66, 6.757, -26.25],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'замок-30',
+    role: 'castle',
+    model: 'barbarian',
+    clip: 'Blocking',
+    at: [-34.99, 3.409, -4.45],
+    turn: -1.57,
+    height: 0.117,
+  },
+  {
+    id: 'замок-31',
+    role: 'castle',
+    model: 'knight',
+    clip: 'Idle',
+    at: [10.75, 0.581, 4.29],
+    turn: 1.57,
+    height: 0.117,
+  },
+  {
+    id: 'замок-32',
+    role: 'castle',
+    model: 'barbarian',
+    clip: 'Blocking',
+    at: [-34.7, 2.197, -12.54],
+    turn: 1.57,
     height: 0.117,
   },
 ]);

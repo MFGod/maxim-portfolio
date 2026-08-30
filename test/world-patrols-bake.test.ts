@@ -11,12 +11,7 @@ import {
   type Triangle,
 } from '@/lib/world/dev-patrols';
 
-/**
- * Кусок ленты: полоса вдоль оси Z, разбитая на клетки по два треугольника.
- *
- * Высота задаётся функцией от Z — так одной строкой получается и ровная
- * дорога, и подъём, и гребень, на котором хорда между узлами проваливается.
- */
+/** Кусок ленты: полоса вдоль оси Z, разбитая на клетки по два треугольника. */
 function strip(
   fromX: number,
   toX: number,
@@ -65,7 +60,6 @@ describe('buildRibbon', () => {
   });
 
   it('считает высоту наклонного куска по месту, а не по узлу', () => {
-    // Лента поднимается на юнит за юнит пути: на середине звена — половина.
     const slope = buildRibbon(strip(-0.04, 0.04, 0, 2, (z) => z));
     expect(slope.heightsAt(0, 0.55)[0]).toBeCloseTo(0.55, 6);
   });
@@ -86,14 +80,11 @@ describe('levelAt', () => {
   ]);
 
   it('выбирает ярус по непрерывности хода, а не самый верхний', () => {
-    // Шли по нижнему — остаёмся на нижнем, хотя над головой настил моста.
     expect(bridge.levelAt(0, 1, 1.02)).toBe(1);
     expect(bridge.levelAt(0, 1, 1.98)).toBe(2);
   });
 
   it('у съезда под мост держится верхнего яруса, а не ближайшего', () => {
-    // Две ленты рядом: настил на 1 и уходящий под него съезд на 0,88. Ближайший
-    // к ожиданию — нижний, и маршрут шаг за шагом уехал бы под настил.
     const ramp = buildRibbon([
       ...strip(-0.04, 0.04, 0, 2, () => 1),
       ...strip(-0.04, 0.04, 0, 2, () => 0.88),
@@ -126,7 +117,6 @@ describe('centerOnRibbon', () => {
   });
 
   it('на перекрёстке держит замер в пределах разумной ширины', () => {
-    // Площадь два на два: без ограничителя середина «ленты» уехала бы на метр.
     const square = buildRibbon(strip(-1, 1, 0, 2, () => 1));
     const centered = centerOnRibbon(square, 0.5, 1, 1, 1, 0);
     expect(centered!.half).toBeCloseTo(BAKE_DEFAULTS.halfWidth, 2);
@@ -150,7 +140,6 @@ describe('auditRoute', () => {
       [0.03, 1, 0.5],
       [0.03, 1, 3.5],
     ];
-    // Полуширина фигуры 0,02, край ленты на 0,04: правая нога на траве.
     expect(auditRoute(flat, edge).footOffShare).toBe(100);
     expect(
       auditRoute(flat, [
@@ -185,8 +174,6 @@ describe('bakeRoute', () => {
   });
 
   it('на гребне ставит точку вместо хорды, режущей склон', () => {
-    // Лента горбом: подъём до z = 2 и спуск после, вершина на 0,1 выше концов.
-    // Прямая между концами проходит под вершиной — идущий шёл бы в земле.
     const hill = buildRibbon(
       strip(-0.04, 0.04, 0, 4, (z) => 1 + 0.05 * (2 - Math.abs(z - 2))),
     );
@@ -211,8 +198,6 @@ describe('bakeRoute', () => {
   });
 
   it('на разрыве ленты ведёт высоту по прямой между её краями', () => {
-    // Брод: лента до z = 1 на высоте 1, после z = 2 — на высоте 2, между ними
-    // ленты нет вовсе.
     const ford = buildRibbon([
       ...strip(-0.04, 0.04, 0, 1, () => 1),
       ...strip(-0.04, 0.04, 2, 3, () => 2),
@@ -263,9 +248,16 @@ describe('bakeRoute у съезда под настил', () => {
 });
 
 describe('bakeRoute с препятствиями', () => {
-  /** Куст на середине ленты: квадрат 0,05 × 0,4 поперёк дороги на z ≈ 2. */
+  /** Лента пошире рабочей: 0,16 против 0,08. */
+  const wide = buildRibbon(strip(-0.08, 0.08, 0, 4, () => 1));
+
+  /** Куст на середине ленты: полоса 0,05 × 0,4 поперёк дороги на z ≈ 2. */
   const bush = (x: number, z: number): string | null =>
     Math.abs(x + 0.015) < 0.025 && Math.abs(z - 2) < 0.2 ? 'bush' : null;
+
+  /** Стена поперёк дороги: 0,12 при ленте 0,16. */
+  const wall = (x: number, z: number): string | null =>
+    Math.abs(x) < 0.06 && Math.abs(z - 2) < 0.2 ? 'wall' : null;
 
   const straight: Point3[] = [
     [0, 1, 0.2],
@@ -273,23 +265,40 @@ describe('bakeRoute с препятствиями', () => {
   ];
 
   it('обходит куст, не сходя с ленты', () => {
-    const baked = bakeRoute(flat, straight, { ...BAKE_DEFAULTS, blocked: bush });
+    const baked = bakeRoute(wide, straight, { ...BAKE_DEFAULTS, blocked: bush });
 
-    expect(baked.report.touches).toBe(0);
+    expect(baked.report.hits).toBe(0);
     expect(baked.report.footOff).toBe(0);
-    for (const [x] of baked.route) expect(Math.abs(x)).toBeLessThanOrEqual(0.04);
+    for (const [x] of baked.route) expect(Math.abs(x)).toBeLessThanOrEqual(0.08);
+  });
+
+  it('без разрешения сойти на обочину остаётся в стене', () => {
+    const baked = bakeRoute(wide, straight, { ...BAKE_DEFAULTS, blocked: wall });
+    expect(baked.report.hits).toBeGreaterThan(0);
+  });
+
+  it('со `stray` обходит стену по обочине', () => {
+    const baked = bakeRoute(wide, straight, {
+      ...BAKE_DEFAULTS,
+      blocked: wall,
+      stray: 0.05,
+    });
+
+    expect(baked.report.hits).toBe(0);
+    for (const [x] of baked.route) expect(Math.abs(x)).toBeLessThanOrEqual(0.13);
+    expect(baked.report.footOff).toBeGreaterThan(0);
   });
 
   it('без следа инстансов идёт напролом — обход стоит точек', () => {
-    const plain = bakeRoute(flat, straight);
+    const plain = bakeRoute(wide, straight);
     expect(
-      auditRoute(flat, plain.route, { ...BAKE_DEFAULTS, blocked: bush }).touches,
+      auditRoute(wide, plain.route, { ...BAKE_DEFAULTS, blocked: bush }).hits,
     ).toBeGreaterThan(0);
   });
 
   it('не сворачивает там, где обходить нечего', () => {
     const free = () => null;
-    const baked = bakeRoute(flat, straight, { ...BAKE_DEFAULTS, blocked: free });
+    const baked = bakeRoute(wide, straight, { ...BAKE_DEFAULTS, blocked: free });
     for (const [x] of baked.route) expect(Math.abs(x)).toBeLessThan(0.01);
   });
 });

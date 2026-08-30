@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import type { FigureClip, WorldFigure } from '@/data/world-figures';
 import type { BookProbe, BookProbePart } from '@/lib/world/book/debug';
+import { ALIVE_LABELS, type AliveVisit } from '@/lib/world/dev-alive';
 import { createDevConsole, type WorldDevTools } from '@/lib/world/dev-console';
 import { figureTools, shotTools } from '@/lib/world/dev-tools';
 import type { World } from '@/lib/world/scene';
@@ -14,15 +15,6 @@ import { WorldFps } from './world-fps';
 /**
  * Инструменты подбора поверх кадра: расстановка фигур, снимки ракурсов, замеры
  * книги, счётчик кадров.
- *
- * Отдельный модуль ради сборки, а не ради порядка. `world-canvas` подключает
- * его через `next/dynamic` под статическим `DEV_TOOLS`, поэтому в прод-сборке
- * ни этот файл, ни `dev-console`, ни шесть модулей `dev-*` за ним в бандл
- * страницы не входят. Пока всё это лежало прямо в канвасе, панели и их код
- * уезжали к посетителю — невидимые, но полностью собранные.
- *
- * Отсюда правило: дев-состояние и дев-обработчики живут здесь целиком. Ни одна
- * их часть не возвращается в `world-canvas`, даже если так короче.
  */
 type Props = {
   /**
@@ -66,6 +58,8 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
    * поворота остаются за книгой и камерой.
    */
   const [editing, setEditing] = useState(false);
+  /** Где стоит обход живого. `null` — ещё не начинали либо живого в мире нет. */
+  const [visit, setVisit] = useState<AliveVisit | null>(null);
   const [figuresCopied, setFiguresCopied] = useState(false);
   /** Идущие группы для панели: список берётся у сцены при входе в правку. */
   const [patrols, setPatrols] = useState<{ id: string; height: number }[]>([]);
@@ -78,27 +72,11 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
   /** Тянем ли фигуру прямо сейчас. Не состояние: меняется внутри одного жеста. */
   const draggingFigure = useRef(false);
 
-  /*
-   * Подключение инструментов к живому миру. Здесь же — дев-хендл в окне: без
-   * него отладка сцены идёт вслепую.
-   *
-   * Инструменты кладутся на прототип мира, а не копируются в него: привычные
-   * `__world.marks`, `__world.crowd`, `__world.step` остаются на своих местах,
-   * а ленивые замеры не просыпаются от самой сборки хендла — дескрипторы
-   * переносятся, не вызываясь.
-   */
   useEffect(() => {
     const live = world();
     if (!ready || !live) return;
 
     const attached = live.attachDevTools(createDevConsole);
-    /*
-     * Правило `set-state-in-effect` здесь снято сознательно. Оно бережёт от
-     * каскада перерисовок, а тут каскад ровно один и на весь сеанс: мир
-     * поднимается однажды, инструменты подключаются однажды, и снять с них
-     * первый снимок раньше этого момента нельзя — до загрузки списки пусты.
-     * Внешняя система, с которой синхронизируется состояние, — сама сцена.
-     */
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTools(attached);
     setShots(attached.shots.list().length);
@@ -113,18 +91,11 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
     };
   }, [world, ready]);
 
-  /*
-   * Отладочный оверлей книги: проекции её частей на экран. Нужен, потому что
-   * переворот идёт секунду с четвертью и глазами в нём не разобрать, чей край
-   * где.
-   */
   useEffect(() => {
     let frame = 0;
     let tick = 0;
 
     const poll = () => {
-      // Каждый четвёртый кадр: замер нужен глазу, а не рендереру, и обновление
-      // состояния шестьдесят раз в секунду само портило бы то, что меряем.
       if (tick++ % 4 === 0) setProbe(world()?.book.debug?.probe() ?? null);
       frame = requestAnimationFrame(poll);
     };
@@ -162,18 +133,11 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
   };
 
   const readFigures = (live: WorldDevTools) => {
-    // В списке панели — весь мир, а не только черновик: править можно любую.
     setFigures([...live.figures.placed()]);
     setFiguresCopied(false);
   };
 
-  /**
-   * Ведёт фигуру до отпускания.
-   *
-   * Движение и отпускание слушаются у окна, а не у канваса: размашистая
-   * протяжка уходит за край кадра, и там события канвасу уже не достаются.
-   * Тот же приём, что у кручения книги в `book/spin.ts`.
-   */
+  /** Ведёт фигуру до отпускания. */
   const dragFigure = (id: string, element: HTMLCanvasElement, live: WorldDevTools) => {
     draggingFigure.current = true;
 
@@ -195,7 +159,6 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
       if (current) current.controls.enabled = true;
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
-      // Отменённый жест — тоже конец: без этого орбита осталась бы выключенной.
       window.removeEventListener('pointercancel', stop);
     };
 
@@ -204,10 +167,6 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
     window.addEventListener('pointercancel', stop);
   };
 
-  /*
-   * Постановка и захват фигур висят на канвасе. Слушатель свой, а не проброшен
-   * из `world-canvas`: продуктовый компонент о правке расстановки не знает.
-   */
   useEffect(() => {
     const element = canvas.current;
     if (!element || !tools || !figureTools || !editing) return;
@@ -233,13 +192,8 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
       const hit = tools.figures.pickAt(x, y);
       if (!hit) return;
 
-      /*
-       * Фигуру из утверждённой расстановки сначала берём в черновик: сами
-       * данные заморожены, а править надо ту, что уже стоит в мире.
-       */
       tools.figures.adopt(hit);
       setSelectedFigure(hit);
-      // Орбита слушает тот же канвас: без этого фигура едет вместе с камерой.
       live.controls.enabled = false;
       dragFigure(hit, element, tools);
     };
@@ -280,13 +234,7 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
     );
   };
 
-  /**
-   * Пишет расстановку в `src/data/world-figures.ts` через дев-ручку.
-   *
-   * После записи страница перезагружается: мир должен подняться из файла, а не
-   * из черновика — иначе непонятно, что сохранилось, а что просто лежит в
-   * `localStorage`. Черновик перед этим забывается, он уже не нужен.
-   */
+  /** Пишет расстановку в `src/data/world-figures.ts` через дев-ручку. */
   const saveFigures = () => {
     if (!tools) return;
 
@@ -300,7 +248,6 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
         if (!response.ok) throw new Error(await response.text());
         setFiguresSaving('готово');
         tools.figures.clear();
-        // Даём кнопке показать «Сохранено», прежде чем страница уедет.
         setTimeout(() => window.location.reload(), 400);
       })
       .catch((error: unknown) => {
@@ -309,13 +256,7 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
       });
   };
 
-  /**
-   * Включает и выключает правку.
-   *
-   * На входе камера забирается у рига: он держит взгляд на станции, а править
-   * расстановку, глядя в одну точку, нельзя. На выходе камеру не трогаем —
-   * человек сам решит, куда лететь дальше.
-   */
+  /** Включает и выключает правку. */
   const toggleEditing = (next: boolean) => {
     setEditing(next);
     setPlacing(false);
@@ -337,12 +278,13 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
     if (tools && id) tools.figures.goTo(id);
   };
 
-  /**
-   * Шаг по списку фигур с переездом камеры.
-   *
-   * Список идёт в том же порядке, что и расстановка в данных: башни, входы,
-   * лагеря, постройки. Обход по кругу — чтобы после последней снова была первая.
-   */
+  /** Обход живого: везёт камеру к следующему дозору, стычке или одиночке. */
+  const goToAlive = (step: number) => {
+    if (!tools) return;
+    setVisit(tools.figures.goToAlive(step));
+  };
+
+  /** Шаг по списку фигур с переездом камеры. */
   const stepFigure = (delta: number) => {
     if (!tools || figures.length === 0) return;
 
@@ -362,10 +304,22 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
     readFigures(tools);
   };
 
-  /*
-   * Горячие клавиши подбора. `[` и `]` заняты разбором книги, поэтому рост
-   * сидит на запятой с точкой — соседних клавишах под теми же пальцами.
-   */
+  useEffect(() => {
+    if (!tools || !figureTools) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.shiftKey || event.code !== 'KeyA') return;
+
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+
+      setVisit(tools.figures.goToAlive(event.altKey ? -1 : 1));
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tools]);
+
   useEffect(() => {
     if (!tools || !figureTools || !editing || !selectedFigure) return;
 
@@ -444,17 +398,43 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
         </div>
       ) : null}
 
-      {/* Счётчик кадров: в мире он часть отладки, а не кадра. */}
       {ready ? <WorldFps /> : null}
 
       {figureTools && ready && !editing ? (
-        <button
-          type="button"
-          onClick={() => toggleEditing(true)}
-          className="border-line-subtle bg-surface-1/85 text-2xs text-ink-muted hover:text-ink absolute right-3 bottom-3 rounded-sm border px-2 py-1 backdrop-blur-sm"
-        >
-          Редактировать расстановку
-        </button>
+        <div className="absolute right-3 bottom-3 flex flex-col items-end gap-1">
+          {visit ? (
+            <p className="border-line-subtle bg-surface-1/85 text-2xs text-ink-muted rounded-sm border px-2 py-1 font-mono backdrop-blur-sm">
+              {ALIVE_LABELS[visit.stop.kind]} «{visit.stop.id}» · {visit.index + 1}/
+              {visit.total}
+            </p>
+          ) : null}
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => goToAlive(-1)}
+              title="Предыдущий живой (Shift+Alt+A)"
+              className="border-line-subtle bg-surface-1/85 text-2xs text-ink-muted hover:text-ink rounded-sm border px-2 py-1 backdrop-blur-sm"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              onClick={() => goToAlive(1)}
+              title="Следующий живой: дозоры, стычки, одиночки (Shift+A)"
+              className="border-line-subtle bg-surface-1/85 text-2xs text-ink-muted hover:text-ink rounded-sm border px-2 py-1 backdrop-blur-sm"
+            >
+              Обход живого →
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleEditing(true)}
+              className="border-line-subtle bg-surface-1/85 text-2xs text-ink-muted hover:text-ink rounded-sm border px-2 py-1 backdrop-blur-sm"
+            >
+              Редактировать расстановку
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {figureTools && ready && editing ? (
@@ -467,7 +447,6 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
           onSelect={(id) => {
             setSelectedFigure(id);
             if (!tools || !id) return;
-            // Выбор из списка правит ту же фигуру, что и щелчок в кадре.
             tools.figures.adopt(id);
             tools.figures.goTo(id);
           }}
@@ -487,10 +466,6 @@ export function WorldDevOverlay({ world, canvas, ready }: Props) {
         />
       ) : null}
 
-      {/*
-        Панель подбора ракурсов. Текст без словаря намеренно: она не часть
-        продукта и уедет вместе с `dev-shots.ts`, когда точки лягут в данные.
-      */}
       {shotTools && ready ? (
         <div className="border-line-subtle bg-surface-1/85 absolute right-3 bottom-3 flex items-center gap-1 rounded-sm border p-1 backdrop-blur-sm">
           <button
