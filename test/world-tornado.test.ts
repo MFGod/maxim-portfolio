@@ -12,17 +12,10 @@ const MAP_OFFSET = { x: 2, z: 3 };
 
 const WORLD_AXIS = { x: AXIS.x + MAP_OFFSET.x, z: AXIS.z + MAP_OFFSET.z };
 
-/**
- * Макет воронки: узкий столб внизу и широкая шапка, смещённая вбок.
- *
- * Шапка здесь не для красоты — она проверяет, что ось берётся по нижней части,
- * а не по центру габаритного ящика: центр ящика такой геометрии уехал бы к
- * шапке, и смерч крутился бы вокруг чужой точки.
- */
+/** Макет воронки: узкий столб внизу и широкая шапка, смещённая вбок. */
 function funnelGeometry(): THREE.BufferGeometry {
   const points: number[] = [];
 
-  // Столб: квадратное сечение вокруг оси, высота 0..1.
   for (const y of [0, 0.5, 1]) {
     for (const [dx, dz] of [
       [-1, -1],
@@ -34,7 +27,6 @@ function funnelGeometry(): THREE.BufferGeometry {
     }
   }
 
-  // Шапка на высоте 8, уведённая на +6 по X и +4 по Z.
   for (const [dx, dz] of [
     [4, 2],
     [8, 2],
@@ -79,7 +71,6 @@ function makeScene() {
   material.name = 'Tornado';
   const funnel = new THREE.Mesh(funnelGeometry(), material);
 
-  // Узел карты со своим сдвигом — как `Icosphere.431` в `map.glb`.
   const map = new THREE.Group();
   map.position.set(MAP_OFFSET.x, 0, MAP_OFFSET.z);
   map.add(funnel);
@@ -106,7 +97,6 @@ describe('attachTornado', () => {
     expect(funnel.position.x).toBeCloseTo(AXIS.x, 5);
     expect(funnel.position.z).toBeCloseTo(AXIS.z, 5);
 
-    // Геометрия сдвинута на ось: столб теперь вокруг нуля, шапка — сбоку.
     funnel.geometry.computeBoundingBox();
     const box = funnel.geometry.boundingBox!;
     expect(box.min.x).toBeCloseTo(-1, 5);
@@ -149,11 +139,8 @@ describe('attachTornado', () => {
     expect(radiusOf(after)).toBeCloseTo(radiusOf(before), 5);
     expect(after.y).toBeCloseTo(before.y, 5);
 
-    // Тридцать секунд — четверть оборота: поворот по Y идёт по часовой стрелке,
-    // поэтому угол в плоскости XZ убывает.
     const turned = angleOf(before) - angleOf(after);
     expect(turned).toBeCloseTo(ANGULAR_SPEED * 30, 5);
-    // `needsUpdate` у атрибута только пишется, читается его счётчик версий.
     expect(debris.instanceMatrix.version).toBeGreaterThan(version);
   });
 
@@ -162,12 +149,10 @@ describe('attachTornado', () => {
     const tornado = attachTornado(scene)!;
 
     const before = instanceAt(debris, 2);
-    // Оборот кадрами по 1/60 секунды: накопленная ошибка не должна расползаться.
     for (let i = 0; i < TURN_SECONDS * 60; i++) tornado.update(1 / 60);
     const after = instanceAt(debris, 2);
 
     expect(after.distanceTo(before)).toBeCloseTo(0, 4);
-    // Угол живёт по модулю круга и после оборота падает обратно к нулю.
     expect(Math.sin(funnel.rotation.y)).toBeCloseTo(0, 4);
   });
 
@@ -180,7 +165,6 @@ describe('attachTornado', () => {
     expect(sphere.center.z).toBeCloseTo(WORLD_AXIS.z, 5);
     expect(sphere.radius).toBeGreaterThanOrEqual(3);
 
-    // Любое положение на орбите обязано остаться внутри сферы.
     const tornado = attachTornado(scene)!;
     for (let step = 0; step < 8; step++) {
       tornado.update(TURN_SECONDS / 8);

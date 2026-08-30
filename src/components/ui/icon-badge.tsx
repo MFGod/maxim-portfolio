@@ -5,10 +5,6 @@ import { cn } from '@/lib/cn';
  * Значок файла, папки или программы. Один на всю систему: и ярлык рабочего
  * стола, и плитка в окне папки рисуют его, поэтому «значки одного размера»
  * держится геометрией, а не договорённостью двух компонентов.
- *
- * Габарит берётся из `--icon-size` — переменной, которую выставляет настройка
- * «Размер значков». Значок занимает чуть больше половины плитки: остальное
- * уходит под подпись в две строки.
  */
 export function IconBadge({
   icon: Icon,
@@ -25,7 +21,6 @@ export function IconBadge({
         'transition-[color,border-color,box-shadow] duration-(--duration-fast)',
         accent ? 'text-accent' : 'text-ink-muted group-hover:text-accent',
         'group-hover:border-line',
-        // Папка под перетаскиваемым ярлыком подсвечивается золотом.
         'group-data-[drop-target]/tile:border-accent group-data-[drop-target]/tile:bg-accent-wash',
       )}
     >

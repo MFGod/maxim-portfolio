@@ -143,9 +143,6 @@ export const fileStore = {
   /** Создаёт узел и возвращает его: вызывающий сразу переводит имя в правку. */
   create(kind: FileKind, parentId: string | null): FileNode | null {
     if (isFull(state.nodes)) return null;
-    // Тот же предел глубины, что и у переноса. Без проверки папку можно было
-    // создать глубже предела, а при следующей загрузке разбор поднял бы её на
-    // рабочий стол — вложенность разваливалась бы сама собой.
     if (parentId !== null && depthOf(state.nodes, parentId) >= FILE_LIMITS.depth) {
       return null;
     }

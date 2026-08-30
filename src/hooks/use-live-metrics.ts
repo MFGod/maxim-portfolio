@@ -37,9 +37,6 @@ function readLoadMs(): number | null {
  * Живые показатели рантайма. Кадры считает `requestAnimationFrame`, публикует
  * таймер раз в секунду вместе с памятью и временем загрузки. Недоступный
  * показатель остаётся `null`, окно печатает «Недоступно».
- *
- * На скрытой вкладке кадров нет, поэтому FPS гаснет: ноль читался бы как
- * зависший интерфейс.
  */
 export function useLiveMetrics(): LiveMetrics {
   const [metrics, setMetrics] = useState<LiveMetrics>({

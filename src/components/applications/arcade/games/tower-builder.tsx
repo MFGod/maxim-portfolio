@@ -88,7 +88,6 @@ export function TowerBuilder({ onFinish }: GameProps) {
     let frame = 0;
 
     const step = (now: number) => {
-      // Партия кончилась — цикл не перезапускается: считать больше нечего.
       if (overRef.current) return;
 
       const elapsed = Math.min(now - previous, MAX_FRAME_MS);
@@ -154,7 +153,6 @@ export function TowerBuilder({ onFinish }: GameProps) {
     paint();
   };
 
-  // Итог уходит с задержкой: сначала обломок долетает, потом появляется оверлей.
   useEffect(() => {
     if (!over) return;
     const timer = setTimeout(

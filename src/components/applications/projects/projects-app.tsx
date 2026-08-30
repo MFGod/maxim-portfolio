@@ -94,12 +94,7 @@ export function ProjectsApp() {
                       </span>
                       <span className="text-2xs text-ink-faint mt-1 block font-mono">
                         {position?.company}
-                        {position ? (
-                          <>
-                            <span className="mx-1.5">·</span>
-                            {formatYears(position.period)}
-                          </>
-                        ) : null}
+                        {position ? <>, {formatYears(position.period)}</> : null}
                       </span>
                     </span>
 

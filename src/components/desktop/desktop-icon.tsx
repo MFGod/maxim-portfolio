@@ -94,11 +94,8 @@ export function DesktopIcon({
 
   const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
     if (renaming) return;
-    // При наложении тронутый ярлык всплывает наверх, достаточно нажатия.
     desktopIconStore.bringToFront(entry.key);
 
-    // Выделение обновляется здесь же: жест начинается в этом событии и не
-    // может дождаться следующего рендера.
     const group = onSelect(event);
     const dragged = group.has(entry.key) ? [...group] : [entry.key];
 
@@ -116,14 +113,11 @@ export function DesktopIcon({
   };
 
   const handleClick = (event: React.MouseEvent) => {
-    // Перетаскивание завершается кликом, открывать в этом случае нельзя.
     if (movedRef.current) {
       movedRef.current = false;
       return;
     }
-    // Клик с модификатором набирает выделение и ничего не открывает.
     if (event.ctrlKey || event.metaKey || event.shiftKey) return;
-    // Обычный клик по группе оставляет выделенным только этот ярлык.
     onOpened();
     openEntry();
   };
@@ -161,8 +155,6 @@ export function DesktopIcon({
     if (!move) return;
     event.preventDefault();
 
-    // Своя позиция известна отдельно: до гидратации хранилища её в общей
-    // раскладке ещё нет.
     const starts: IconPositions = { [entry.key]: position };
     for (const key of group) {
       const start = positions[key];
@@ -187,9 +179,6 @@ export function DesktopIcon({
       className="group/tile absolute top-0 left-0 will-change-transform data-[dragging]:z-[1000]"
       onContextMenu={onContextMenu}
     >
-      {/* Во время переименования плитка перестаёт быть кнопкой: поле ввода
-          внутри `button` — недопустимая вложенность, и браузер не отдаёт ему
-          ни фокус, ни набор текста. */}
       {renaming && entry.kind === 'file' ? (
         <div className="before:bg-accent-wash relative flex size-(--icon-size) flex-col items-center justify-center gap-(--icon-gap) rounded-md p-(--icon-pad) before:absolute before:inset-0.5 before:-z-10 before:rounded-md">
           <IconBadge icon={Icon} accent={isFolder} />
@@ -208,9 +197,6 @@ export function DesktopIcon({
           }
           className={cn(
             'group relative flex size-(--icon-size) touch-none flex-col items-center justify-center gap-(--icon-gap) overflow-hidden rounded-md p-(--icon-pad) select-none',
-            // Подсветка — отдельным слоем с отступом 2px от края плитки. Сама
-            // плитка остаётся ровно в габарите из `iconMetrics`: по этой коробке
-            // считаются попадания рамки и привязка к сетке.
             'before:absolute before:inset-0.5 before:-z-10 before:rounded-md',
             'before:transition-colors before:duration-(--duration-fast)',
             selected ? 'before:bg-accent-wash' : 'hover:before:bg-white/5',

@@ -15,7 +15,6 @@
   );
   --wp-grid-color: #e8d9b5;
   --wp-grid-opacity: 0.04;
-  /* Свет с верхнего края — то самое золотое зарево над горизонтом. */
   --wp-rays: radial-gradient(
     70% 45% at 50% 0%,
     color-mix(in oklab, var(--color-accent) 14%, transparent) 0%,
@@ -30,8 +29,6 @@
   --wp-vignette: radial-gradient(100% 100% at 50% 50%, transparent 52%, #000000b3 100%);
 }
 
-/* Вариант по умолчанию повторён явно: превью-плитка внутри Settings иначе
-   унаследовала бы значения текущих обоев, а не своего варианта. */
 [data-wallpaper='default'] {
   --wp-base: radial-gradient(
     125% 95% at 50% -15%,

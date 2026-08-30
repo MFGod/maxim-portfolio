@@ -1,27 +1,8 @@
-/*
- *  Оболочка карты: копия рельефа, поднятая на отступ.
- *
- *  Камера не может опуститься под неё и не может пройти сквозь — там, где
- *  рельеф обрывается вверх, оболочка обрывается вместе с ним и работает стеной.
- *
- *  Строится растеризацией треугольников в сетку, а не лучами: один рейкаст по
- *  этой карте стоит ~110 мс, и сетка в 13 800 колонок собиралась бы 25 минут.
- *  Растеризация всей карты укладывается примерно в 100 мс.
- */
-
 import * as THREE from 'three';
 
 import { CAMERA_FLOOR, type WorldBounds } from './bounds';
 
-/**
- *  Карман — место, где потолок проседает.
- *
- *  Оболочка держит камеру в полуметре над рельефом, и этого достаточно для
- *  прогулки, но мало для кадра: метка высотой в три сантиметра уходит за
- *  нижний край, стоит подняться на треть юнита. Ракурс, подобранный вживую,
- *  объявляет вокруг себя зону, где потолок опускается до его высоты — и тот же
- *  вид становится доступен посетителю руками, не только пролёту.
- */
+/** Карман — место, где потолок проседает. */
 export type ShellPocket = {
   x: number;
   z: number;
@@ -42,49 +23,21 @@ type ShellField = {
   minZ: number;
 };
 
-/**
- *  Сторона ячейки.
- *
- *  Сверено с лучом по 60 точкам суши: при 0.25 сетка расходится с рельефом на
- *  0.197 м в среднем. На фоне отступа в полтора метра это несущественно, а
- *  памяти и времени уходит вчетверо меньше, чем при 0.125.
- */
+/** Сторона ячейки. */
 const CELL = 0.25;
 
 /** Порог «треугольник плоский» — такой заливается прямоугольником целиком. */
 const FLAT_EPSILON = 0.15;
 
-/**
- *  Что в оболочку не попадает.
- *
- *  Крона Древа — верхняя поверхность на высоте 30.2 при земле около нуля.
- *  Без этого исключения оболочка вздувается горбом на тридцать метров и
- *  огораживает Древо стеной, сквозь которую не пройти.
- */
+/** Что в оболочку не попадает. */
 const EXCLUDED_MESHES = new Set(['Icosphere430_90', 'Icosphere430_91']);
 const EXCLUDED_MATERIALS = /leaves|листва|painting erdtree/i;
 
 export const shellSettings = {
   enabled: true,
-  /**
-   * На сколько оболочка отстоит от рельефа вверх.
-   *
-   * Замер 2026-08-21 по 2901 объекту, стоящему на земле: сетка почти везде
-   * выше настоящего рельефа (медиана 0.65), ниже него она уходит в 0.5%
-   * точек и худший провал — 0.206. Отсюда 0.35: полтора квадрата сетки,
-   * ниже начнётся протыкание рельефа. Прежние 1.5 держали камеру в полутора
-   * метрах над землёй, и к благодатям было не подойти.
-   */
+  /** На сколько оболочка отстоит от рельефа вверх. */
   padding: 0.35,
-  /**
-   * На сколько оболочка отходит от обрывов вбок, в юнитах мира.
-   *
-   * Разнос — подушка между камерой и скалой, но он же натягивает потолок над
-   * всем, что стоит рядом с рельефом: при 1 купол над благодатями держался на
-   * 1.0–2.2, при 0.5 — на 0.6–2.1, а метки проектов опускаются с 1.3 до 1.07
-   * по медиане. Ноль роняет купол на сам отступ, но тогда камера подходит к
-   * обрыву вплотную и ближняя плоскость лезет внутрь скалы.
-   */
+  /** На сколько оболочка отходит от обрывов вбок, в юнитах мира. */
   spread: 0.5,
   visible: false,
 };
@@ -96,17 +49,7 @@ export function setShellPockets(next: ShellPocket[]) {
   pockets = next;
 }
 
-export function listShellPockets(): ShellPocket[] {
-  return pockets;
-}
-
-/**
- * Опускает потолок внутри карманов.
- *
- * К краю кармана послабление сходит на нет линейно: без растушёвки камера,
- * пересекая границу, подскакивала бы ступенькой. Ниже уровня воды карман не
- * пускает никогда — там своя граница, и она не про рельеф.
- */
+/** Опускает потолок внутри карманов. */
 function relax(x: number, z: number, ceiling: number): number {
   let result = ceiling;
 
@@ -129,13 +72,7 @@ let field: ShellField | null = null;
 /** Сырые высоты до раздутия — чтобы менять боковой отступ без пересборки. */
 let raw: Float32Array | null = null;
 
-/**
- * Раздувает сетку вширь: клетка забирает максимум по квадратной окрестности.
- *
- * Так обрыв «толстеет» на заданный радиус, и камера упирается в него, не
- * доходя до самой стены. Фильтр разделимый — сначала по строкам, потом по
- * столбцам, — поэтому стоит O(клеток × радиус), а не квадрата радиуса.
- */
+/** Раздувает сетку вширь: клетка забирает максимум по квадратной окрестности. */
 function dilate(
   source: Float32Array,
   cols: number,
@@ -184,21 +121,13 @@ export function applySpread() {
   return { радиусКлеток: radius, мс: +(performance.now() - started).toFixed(1) };
 }
 
-/**
- * Не рельеф: крона Древа и всё, что помечено листвой.
- *
- * Отдаётся наружу, потому что тот же вопрос задаёт опавшая листва: ей надо
- * знать, на что лист может лечь. Без общего списка ковёр садился на крону
- * Древа — её верхняя поверхность висит на тридцати юнитах, и лист там честно
- * находил под собой геометрию.
- */
+/** Не рельеф: крона Древа и всё, что помечено листвой. */
 export const notTerrain = (object: THREE.Mesh): boolean =>
   EXCLUDED_MESHES.has(object.name) ||
   EXCLUDED_MATERIALS.test((object.material as THREE.Material | undefined)?.name ?? '');
 
 /**
  * Снимает рельеф в регулярную сетку.
- *
  * @param {THREE.Object3D} root корень карты
  * @param {{minX:number,maxX:number,minZ:number,maxZ:number}} bounds
  */
@@ -232,8 +161,6 @@ export function buildMapShell(root: THREE.Object3D, bounds: WorldBounds) {
     const position = object.geometry.attributes.position;
     if (!position) return;
 
-    // Горячий цикл на миллионы вершин: сырые массивы и ручное умножение на
-    // матрицу. Vector3 с его методами стоил втрое дороже растеризации.
     const points = position.array;
     const index = object.geometry.index ? object.geometry.index.array : null;
     const count = index ? index.length / 3 : position.count / 3;
@@ -294,15 +221,11 @@ export function buildMapShell(root: THREE.Object3D, bounds: WorldBounds) {
       const r1 = Math.min(rows - 1, Math.floor((Math.max(az, bz, cz) - minZ) / CELL));
       if (c1 < c0 || r1 < r0) continue;
 
-      // Клетка крупнее среднего треугольника этой карты, так что почти все
-      // укладываются в одну и растеризации не требуют.
       if (c0 === c1 && r0 === r1) {
         raise(c0, r0, top);
         continue;
       }
 
-      // Плоский заливается прямоугольником: ошибка не больше разброса
-      // высот самого треугольника, то есть меньше отступа.
       if (top - Math.min(ay, by, cy) <= FLAT_EPSILON) {
         for (let r = r0; r <= r1; r++) {
           const row = r * cols;
@@ -311,10 +234,6 @@ export function buildMapShell(root: THREE.Object3D, bounds: WorldBounds) {
         continue;
       }
 
-      // Наклонный крупный: высота из плоскости треугольника, клетка идёт в
-      // зачёт, только если её центр внутри проекции. Заливать такой
-      // прямоугольником нельзя — у отвесной стены проекция почти линия, а
-      // прямоугольник вокруг неё широкий, и получаются невидимые уступы.
       const area = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
       if (Math.abs(area) >= 1e-12) {
         const inverse = 1 / area;
@@ -335,8 +254,6 @@ export function buildMapShell(root: THREE.Object3D, bounds: WorldBounds) {
         }
       }
 
-      // Вершины ставим всегда: тонкий длинный треугольник может не накрыть
-      // ни одного центра клетки и бесследно пропасть из сетки.
       raise(Math.floor((ax - minX) / CELL), Math.floor((az - minZ) / CELL), ay);
       raise(Math.floor((bx - minX) / CELL), Math.floor((bz - minZ) / CELL), by);
       raise(Math.floor((cx - minX) / CELL), Math.floor((cz - minZ) / CELL), cy);
@@ -361,54 +278,6 @@ export function buildMapShell(root: THREE.Object3D, bounds: WorldBounds) {
   };
 }
 
-/**
- * Высота самой земли в точке — без отступа купола и без бокового расширения.
- *
- * `shellHeightAt` отвечает на другой вопрос: где камере нельзя. Тот ответ
- * лежит выше рельефа на `padding` и расширен вбок на `spread`, чтобы камера
- * не цеплялась за края, — и предмет, положенный по нему, висит над травой.
- * Здесь берётся исходная сетка, снятая прямо с треугольников карты.
- *
- * @returns `null`, если под точкой нет карты
- */
-export function terrainHeightAt(x: number, z: number): number | null {
-  if (!raw || !field) return null;
-
-  const fx = (x - field.minX) / CELL - 0.5;
-  const fz = (z - field.minZ) / CELL - 0.5;
-  const cx = Math.floor(fx);
-  const cz = Math.floor(fz);
-
-  const at = (ax: number, az: number): number =>
-    !raw || ax < 0 || ax >= field!.cols || az < 0 || az >= field!.rows
-      ? -Infinity
-      : raw[az * field!.cols + ax]!;
-
-  const h00 = at(cx, cz);
-  const h10 = at(cx + 1, cz);
-  const h01 = at(cx, cz + 1);
-  const h11 = at(cx + 1, cz + 1);
-
-  if (
-    h00 === -Infinity ||
-    h10 === -Infinity ||
-    h01 === -Infinity ||
-    h11 === -Infinity
-  ) {
-    const nearest = at(Math.round(fx), Math.round(fz));
-    return nearest === -Infinity ? null : nearest;
-  }
-
-  const tx = fx - cx;
-  const tz = fz - cz;
-
-  // Та же диагональ, что и у купола: клетка режется на два треугольника, и
-  // интерполировать надо по тому из них, в который попала точка.
-  return tx + tz <= 1
-    ? h00 + tx * (h10 - h00) + tz * (h01 - h00)
-    : h11 + (1 - tx) * (h01 - h11) + (1 - tz) * (h10 - h11);
-}
-
 /** Прореженная сетка высот рельефа: то, что можно отдать шейдеру текстурой. */
 export type GroundField = {
   /** Высоты по строкам, снизу вверх по Z. Без карты под точкой — `-Infinity`. */
@@ -423,12 +292,6 @@ export type GroundField = {
 
 /**
  * Отдаёт сетку высот, прореженную в `step` раз.
- *
- * Полная сетка купола — 479 на 459 клеток по четверти юнита: почти
- * девятьсот килобайт, и такая точность нужна только камере, которая об эти
- * клетки тормозит. Листу довольно знать, где земля, с точностью до юнита,
- * поэтому шаг берётся крупнее.
- *
  * @returns `null`, если купол ещё не построен — карта не пришла
  */
 export function groundField(step = 4): GroundField | null {
@@ -440,11 +303,6 @@ export function groundField(step = 4): GroundField | null {
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      /*
-       * Из клеток берётся наименьшая, а не средняя: у края обрыва соседние
-       * отличаются на десяток юнитов, и среднее подвесило бы «землю» в
-       * воздухе — лист растворялся бы, не долетев.
-       */
       let lowest = Infinity;
 
       for (let dr = 0; dr < step; dr++) {
@@ -468,10 +326,6 @@ const cellAt = (cx: number, cz: number): number =>
 
 /**
  * Высота оболочки в точке: рельеф плюс отступ, сглаженный между клетками.
- *
- * Интерполяция барицентрическая, по той диагонали, которой клетка разрезана на
- * треугольники. Без неё ход камеры идёт ступеньками по размеру клетки.
- *
  * @returns {number|null} null — под точкой нет карты
  */
 export function shellHeightAt(x: number, z: number): number | null {
@@ -513,15 +367,7 @@ const STEP_UP = 0.35;
 /** Предел крутизны подъёма: тангенс угла, «метров вверх на метр вперёд». */
 const SLOPE_MAX_TAN = Math.tan((60 * Math.PI) / 180);
 
-/**
- * Не пускает камеру под оболочку. Только вверх — вниз её ничто не тянет.
- *
- * Гравитации здесь нет намеренно: камера летающая, а не ходок. Она обязана
- * подниматься по взгляду вверх и оставаться на высоте, сойдя с обрыва.
- *
- * Цель двигается вместе с камерой: OrbitControls держит сферические координаты
- * как разницу этих векторов, и сдвиг одного её ломает.
- */
+/** Не пускает камеру под оболочку. Только вверх — вниз её ничто не тянет. */
 export function clampCameraToShell(camera: THREE.Camera, target: THREE.Vector3) {
   if (!field || !shellSettings.enabled) return;
 
@@ -533,12 +379,7 @@ export function clampCameraToShell(camera: THREE.Camera, target: THREE.Vector3) 
   target.y += lift;
 }
 
-/**
- * Укорачивает шаг об стены оболочки. Меняет `velocity` на месте.
- *
- * Оси проверяются по отдельности: при общей проверке камера в углу встаёт
- * намертво, а по осям соскальзывает вдоль стены.
- */
+/** Укорачивает шаг об стены оболочки. Меняет `velocity` на месте. */
 export function clampMovementToShell(camera: THREE.Camera, velocity: THREE.Vector3) {
   if (!field || !shellSettings.enabled) return velocity;
   if (velocity.lengthSq() < 1e-12) return velocity;
@@ -549,13 +390,7 @@ export function clampMovementToShell(camera: THREE.Camera, velocity: THREE.Vecto
   return velocity;
 }
 
-/**
- * Какую долю смещения можно пройти, не упершись.
- *
- * Шаг рубится на отрезки не длиннее половины клетки: за кадр камера проходит
- * около 0.25 юнита, и проверка одной конечной точки позволила бы перескочить
- * тонкую стену целиком.
- */
+/** Какую долю смещения можно пройти, не упершись. */
 function sweep(x: number, z: number, dx: number, dz: number, eye: number): number {
   const length = Math.sqrt(dx * dx + dz * dz);
   const steps = Math.max(1, Math.ceil(length / (CELL * 0.5)));
@@ -571,12 +406,8 @@ function sweep(x: number, z: number, dx: number, dz: number, eye: number): numbe
       continue;
     }
 
-    // Отсчёт от глаз, а не от рельефа под ними: камера летающая, и высоко
-    // над скалой она обязана проходить свободно.
     const rise = floor - eye;
 
-    // Правило Unity: подъём проходим, если он не выше ступени ИЛИ путь к
-    // нему не круче предела.
     if (rise > STEP_UP && rise > SLOPE_MAX_TAN * length * t) break;
 
     passed = t;

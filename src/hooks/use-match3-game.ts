@@ -44,8 +44,6 @@ export function useMatch3Game({ onFinish, cellsRef }: Options) {
   const popMs = animated ? 170 : 0;
   const fallMs = animated ? 210 : 0;
 
-  // Счётчик живёт в состоянии, а не в ref: его читает инициализация поля,
-  // которая исполняется во время рендера.
   const [nextId] = useState(() => {
     let value = 0;
     return () => {
@@ -108,7 +106,6 @@ export function useMatch3Game({ onFinish, cellsRef }: Options) {
       clearInterval(timer);
       if (overRef.current) return;
       overRef.current = true;
-      // Копия: каскад может дописать в журнал уже после конца партии.
       onFinishRef.current({
         game: 'three-in-row',
         matches: matchesRef.current.slice(),
@@ -148,7 +145,6 @@ export function useMatch3Game({ onFinish, cellsRef }: Options) {
       cascade += 1;
     }
 
-    // Ходов не осталось — поле пересобирается, иначе партия встанет.
     if (aliveRef.current && !hasMove(current)) {
       const fresh = createBoard(Math.random, nextId);
       boardRef.current = fresh;
@@ -207,8 +203,6 @@ export function useMatch3Game({ onFinish, cellsRef }: Options) {
     setCursor(indexOf(row, column));
   };
 
-  // Фокус идёт за курсором, но только внутри поля: иначе он прыгал бы обратно
-  // на клетку, когда человек ушёл на кнопки вокруг.
   useEffect(() => {
     const node = cellsRef.current[cursor];
     const active = document.activeElement;
@@ -216,8 +210,6 @@ export function useMatch3Game({ onFinish, cellsRef }: Options) {
     if (active instanceof HTMLElement && active.dataset.cell) node.focus();
   }, [cellsRef, cursor]);
 
-  // Порядок в DOM — по идентификатору фишки: так узел переживает падение и
-  // браузер анимирует перемещение, а не подменяет элемент.
   const tiles = board
     .flatMap((cell, index) => (cell ? [{ cell, index }] : []))
     .sort((left, right) => left.cell.id - right.cell.id);

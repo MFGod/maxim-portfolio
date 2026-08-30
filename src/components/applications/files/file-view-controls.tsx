@@ -43,9 +43,6 @@ const VIEW_META: Record<FileView, { label: string; icon: IconComponent }> = {
  */
 export function ViewSwitch({ value }: { value: FileView }) {
   return (
-    // Группа кнопок-переключателей, а не `radiogroup`: роль радиогруппы
-    // обязывает к навигации стрелками и одному месту в табуляции, а здесь
-    // четыре обычные кнопки — им хватает `aria-pressed`.
     <div
       role="group"
       aria-label="Режим отображения"

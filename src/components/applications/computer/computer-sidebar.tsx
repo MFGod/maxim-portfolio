@@ -96,8 +96,6 @@ function FolderTree({
         );
 
         return (
-          // Пункт и его поддерево — соседи в одном списке: обёртка сделала бы
-          // `li` внутри `li`, а это недопустимая вложенность.
           <Fragment key={folder.id}>
             <SidebarRow
               icon={Folder}

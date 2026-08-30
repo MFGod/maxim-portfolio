@@ -37,7 +37,7 @@ export function ResumeApp() {
             {profile.role}
           </p>
           <p className="text-2xs text-ink-faint mt-1 font-mono">
-            {formatAge(profile.age)} · {profile.location}
+            {formatAge(profile.age)}, {profile.location}
           </p>
 
           <ul className="mt-5 flex flex-wrap gap-2">
@@ -92,12 +92,11 @@ export function ResumeApp() {
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <h3 className="text-ink text-base font-medium">
                       {position.company}
-                      <span className="text-ink-faint"> · </span>
+                      <span className="text-ink-faint">, </span>
                       <span className="text-ink-muted">{position.role}</span>
                     </h3>
                     <p className="text-2xs text-ink-faint font-mono">
-                      {formatPeriod(position.period)}
-                      <span className="mx-1.5">·</span>
+                      {formatPeriod(position.period)},{' '}
                       {formatDuration(durationInMonths(position.period))}
                     </p>
                   </div>
@@ -119,7 +118,7 @@ export function ResumeApp() {
                               {project.name}
                             </span>
                             <span className="text-2xs text-ink-faint ml-2 font-mono">
-                              {project.stack.slice(0, 4).join(' · ')}
+                              {project.stack.slice(0, 4).join(', ')}
                             </span>
                             <span className="text-ink-muted mt-0.5 block text-sm">
                               {project.tagline}

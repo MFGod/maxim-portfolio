@@ -65,7 +65,6 @@ describe('контентный слой', () => {
       for (const visual of project.visuals) {
         expect(visual.src, project.slug).toMatch(/^\/projects\/[a-z0-9-]+\.webp$/);
         expect(visual.alt.trim(), project.slug).not.toBe('');
-        // Размер фиксирован форматом галереи: 16:10, см. docs/image-prompts.md.
         expect(visual.width, project.slug).toBe(1600);
         expect(visual.height, project.slug).toBe(1000);
       }

@@ -154,7 +154,6 @@ describe('layoutIconPosition', () => {
   });
 
   it('на узком экране остаётся внутри рабочей области', () => {
-    // Зона Hero шире самого экрана: выталкивать некуда, границы важнее.
     const narrow: Workspace = { x: 12, y: 42, width: 300, height: 300 };
     inside(layoutIconPosition({ x: 900, y: 900 }, narrow, metrics), narrow);
     inside(layoutIconPosition({ x: 150, y: 150 }, narrow, metrics), narrow);

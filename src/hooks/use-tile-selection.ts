@@ -26,10 +26,6 @@ type Options = {
  * Выделение плиток: одиночное нажатие с модификаторами и рамка. Держит отсчёт
  * для Shift-диапазона и то, что было выделено до рамки — рамка дополняет
  * прежнее выделение с модификатором и начинает с чистого листа без него.
- *
- * Общий для ярлыков рабочего стола и проводника: попадания в рамку считает
- * вызывающий, потому что на столе они известны по координатам, а в проводнике
- * их приходится замерять в DOM.
  */
 export function useTileSelection<Box extends HTMLElement = HTMLDivElement>({
   ids,
@@ -69,7 +65,6 @@ export function useTileSelection<Box extends HTMLElement = HTMLDivElement>({
       setAnchor(key);
       return next;
     }
-    // Нажатие на ярлыке из группы группу не рушит: её собираются тянуть.
     if (selectedKeys.has(key)) return selectedKeys;
 
     const next = new Set([key]);

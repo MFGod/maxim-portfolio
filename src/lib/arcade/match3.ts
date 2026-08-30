@@ -159,7 +159,5 @@ export function createBoard(random: Random, nextId: IdSource): Board {
     if (hasMove(board)) return board;
   }
 
-  // Сорок попыток подряд без хода — на пяти гранях исход невозможный, но
-  // возвращать половину поля нельзя: отдаём последнюю сборку целиком.
   return collapse(new Array<Cell | null>(CELL_COUNT).fill(null), random, nextId);
 }

@@ -117,7 +117,6 @@ describe('камера', () => {
   });
 
   it('держит вершину башни на месте', () => {
-    // Видимая высота ряда = его номер минус сдвиг камеры.
     const topOf = (rowCount: number) => rowCount * BLOCK_HEIGHT - cameraShift(rowCount);
     expect(topOf(VISIBLE_ROWS)).toBe(topOf(VISIBLE_ROWS + 7));
   });

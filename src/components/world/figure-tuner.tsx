@@ -6,10 +6,6 @@ import { cn } from '@/lib/cn';
 /**
  * Панель расстановки фигур. Текст без словаря намеренно: она не часть продукта
  * и уедет вместе с `dev-figures.ts`, когда расстановка ляжет в данные.
- *
- * Устройство повторяет панель ракурсов: поставить — поправить — скопировать.
- * Разница в том, что у фигуры четыре величины вместо шести чисел, и подбирают
- * их не камерой, а мышью прямо в кадре.
  */
 type Props = {
   figures: WorldFigure[];
@@ -82,10 +78,6 @@ export function FigureTuner({
             ✕
           </button>
           <p className="text-2xs text-ink-muted font-mono">Фигуры · {figures.length}</p>
-          {/*
-            Обход подряд: со ста фигурами искать нужную в кадре бессмысленно,
-            поэтому камера едет к следующей сама.
-          */}
           <button
             type="button"
             onClick={() => onStep(-1)}
@@ -135,7 +127,6 @@ export function FigureTuner({
                 title={patrol.id}
                 className="border-line-subtle text-2xs text-ink-muted hover:text-ink rounded-xs border px-1.5 py-0.5 font-mono"
               >
-                {/* Имена длинные, а места мало: показываем хвост после дефиса. */}
                 {patrol.id.replace('дозор-', '№').replace('дракон-', '')}
               </button>
             ))}
@@ -155,7 +146,6 @@ export function FigureTuner({
                 title={battle.id}
                 className="border-line-subtle text-2xs text-ink-muted hover:text-ink rounded-xs border px-1.5 py-0.5 font-mono"
               >
-                {/* Места мало: приставку «стычка-» несёт заголовок раздела. */}
                 {battle.id.replace('стычка-', '')}
               </button>
             ))}
@@ -263,11 +253,6 @@ export function FigureTuner({
       ) : null}
 
       <div className="border-line-subtle mt-2 flex items-center gap-1 border-t pt-2">
-        {/*
-          Сохранение пишет расстановку прямо в `src/data/world-figures.ts`
-          через дев-ручку. Копирование остаётся рядом: иногда нужен кусок в
-          буфер, а не запись в файл.
-        */}
         <button
           type="button"
           onClick={onSave}

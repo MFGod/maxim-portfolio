@@ -107,8 +107,6 @@ describe('симуляция', () => {
     );
     const directions = simulation.nodes.map((node) => normalize(node.position));
 
-    // Идеальная упаковка 44 узлов даёт «дыру» около 17°; всё, что заметно
-    // больше, читается как пустая зона на шаре.
     const samples = 400;
     const golden = Math.PI * (3 - Math.sqrt(5));
     let widest = 0;

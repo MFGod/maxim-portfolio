@@ -55,16 +55,8 @@ export default function OpengraphImage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, fontSize: 24, color: '#bcb19c' }}>
-        <span>React</span>
-        <span style={{ color: '#82652d' }}>·</span>
-        <span>TypeScript</span>
-        <span style={{ color: '#82652d' }}>·</span>
-        <span>Next.js</span>
-        <span style={{ color: '#82652d' }}>·</span>
-        <span>Vue 3</span>
-        <span style={{ color: '#82652d' }}>·</span>
-        <span>Telegram &amp; VK Mini Apps</span>
+      <div style={{ display: 'flex', fontSize: 24, color: '#bcb19c' }}>
+        <span>React, TypeScript, Next.js, Vue 3, Telegram &amp; VK Mini Apps</span>
       </div>
     </div>,
     size,

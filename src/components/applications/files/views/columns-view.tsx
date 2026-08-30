@@ -49,10 +49,6 @@ export function ColumnsView({
                     item={item}
                     view={{
                       ...view,
-                      // Обычное нажатие на папке раскрывает её следующей
-                      // панелью: это и есть навигация в режиме колонок. С
-                      // модификатором набирают выделение — уходить из папки
-                      // на середине набора нельзя.
                       onSelect: (key, modifiers) => {
                         view.onSelect(key, modifiers);
                         const additive =

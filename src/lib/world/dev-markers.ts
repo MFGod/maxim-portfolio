@@ -1,18 +1,4 @@
-/**
- * Пометки на инстансах — инструмент подбора, не часть мира.
- *
- * Благодать в карте занимает три сантиметра: с рабочей дистанции камеры её не
- * видно вовсе, и договориться «вот эта» невозможно. Инструмент вешает над
- * каждым инстансом выбранного вида номер и столб, чтобы точку можно было
- * назвать вслух и подставить в данные.
- *
- * Номера рисуются спрайтами без ослабления по расстоянию: цифра одинакова с
- * любой высоты, иначе с обзорной точки она вырождается в пиксель. Глубина им
- * не писана — метка видна сквозь скалу, потому что искать её приходится
- * заранее не зная, где она.
- *
- * Удаляется файлом целиком, как `trim.js` после обрезки карты.
- */
+/** Пометки на инстансах — инструмент подбора, не часть мира. */
 
 import * as THREE from 'three';
 
@@ -34,9 +20,7 @@ const FONT = 'bold 40px ui-monospace, monospace';
 /**
  * Подпись на прозрачном холсте. Ширина считается по тексту: у фиксированной
  * длинные имена обрезались на середине, и «flexy» превращалось в «flex».
- *
  * @returns текстура и её пропорции — спрайту нужно то же соотношение сторон,
- *   иначе буквы растянет.
  */
 function labelTexture(text: string): { texture: THREE.CanvasTexture; ratio: number } {
   const canvas = document.createElement('canvas');
@@ -47,7 +31,6 @@ function labelTexture(text: string): { texture: THREE.CanvasTexture; ratio: numb
   canvas.width = width;
   canvas.height = 64;
 
-  // Размеры холста сбрасывают контекст: шрифт задаём заново.
   context.font = FONT;
   context.fillStyle = 'rgba(8, 10, 20, 0.82)';
   context.beginPath();
@@ -66,7 +49,6 @@ function labelTexture(text: string): { texture: THREE.CanvasTexture; ratio: numb
 
 /**
  * Вешает номера на все инстансы вида.
- *
  * @param scene сцена мира
  * @param name имя инстанс-меша: `grace`, `dungeon`, `catacombs`, `evergaol`…
  * @returns список помеченного: номер и координаты
@@ -138,10 +120,6 @@ export type RoutePoint = {
 /**
  * Рисует путь камеры: ломаная по точкам, стрелка на каждом отрезке и подпись у
  * каждой остановки.
- *
- * Маршрут проверяется глазом, а не числами: список координат не показывает,
- * что камера идёт сквозь скалу, разворачивается на месте или дважды проходит
- * одно и то же. Линия поверх геометрии — показывает.
  */
 export function markRoute(
   scene: THREE.Scene,
@@ -164,16 +142,6 @@ export function markRoute(
     depthTest: false,
   });
 
-  /*
-   * Труба, а не линия: `LineBasicMaterial` в WebGL всегда рисует толщиной в
-   * один пиксель, и на обзорной высоте путь пропадал вовсе. Кривая та же, по
-   * которой поведёт камеру риг, — схема показывает будущий пролёт, а не
-   * ломаную между точками.
-   *
-   * Потому и `centripetal`: риг считает путь центростремительной Catmull-Rom
-   * (`camera-path.ts`). На равномерной схема заворачивала бы там, где камера
-   * идёт ровно, — и врала бы ровно в том, ради чего её включают.
-   */
   const curve = new THREE.CatmullRomCurve3(vectors, false, 'centripetal');
   const tube = new THREE.Mesh(
     new THREE.TubeGeometry(curve, Math.max(24, vectors.length * 12), 0.16, 6, false),
@@ -183,8 +151,6 @@ export function markRoute(
   tube.renderOrder = 900;
   group.add(tube);
 
-  // Стрелки по касательной к кривой, а не к хорде: на изгибе они иначе смотрят
-  // мимо пути.
   const arrows = Math.max(3, vectors.length * 2);
   for (let i = 1; i <= arrows; i++) {
     const t = i / (arrows + 1);
@@ -261,7 +227,6 @@ export function clearMarks(scene: THREE.Scene) {
     if (line.isLine) line.geometry.dispose();
   });
 
-  // Материал столбов один на всю группу: его достаточно освободить однажды.
   const line = group.children.find((child) => (child as THREE.Line).isLine) as
     THREE.Line | undefined;
   (line?.material as THREE.Material | undefined)?.dispose();

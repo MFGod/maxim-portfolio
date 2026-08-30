@@ -233,8 +233,6 @@ export function cssVariablesFor(settings: Settings): Record<string, string> {
     const numeric =
       typeof value === 'number' && Number.isFinite(value) ? value : entry.fallback;
     const clamped = Math.min(Math.max(numeric, entry.range.min), entry.range.max);
-    // Тот же шаг, что и в парсере: рукописное значение в хранилище не должно
-    // давать один размер до гидратации и другой после.
     const stepped =
       entry.range.min +
       Math.round((clamped - entry.range.min) / entry.range.step) * entry.range.step;

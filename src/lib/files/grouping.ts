@@ -127,8 +127,6 @@ export function groupEntries(
     );
   }
 
-  // По имени: набор букв заранее не известен, поэтому порядок групп считается
-  // по факту — по-русски, с цифрами и прочими знаками в конце.
   const initials = [...new Set(entries.map((entry) => initialOf(entry.name)))].sort(
     (a, b) => {
       const rank = (value: string) => (value === '#' ? 2 : value === '0–9' ? 1 : 0);

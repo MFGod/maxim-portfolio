@@ -64,8 +64,6 @@ export function Dock() {
 
         {dockGroups.map((group, index) => (
           <Fragment key={group.join()}>
-            {/* Разделитель между группами: слева навигация и резюме, справа
-                инструменты. Одна черта вместо тринадцати одинаковых иконок. */}
             {index > 0 ? (
               <li
                 role="separator"
@@ -227,9 +225,6 @@ function DockButton({
   const inner = (
     <>
       <span className="group-kbd-focus:scale-100 group-kbd-focus:opacity-100 pointer-events-none absolute bottom-full left-1/2 mb-3 -translate-x-1/2 scale-95 opacity-0 transition-[opacity,transform] duration-(--duration-fast) group-hover:scale-100 group-hover:opacity-100">
-        {/* В подсказке только название: подпись дублировала соседнюю иконку и
-            растягивала её вдвое. Пояснение осталось в имени для чтения с
-            экрана и в «Моём компьютере». */}
         <span className="border-line-subtle bg-surface-2 text-2xs text-ink block rounded-md border px-2.5 py-1.5 whitespace-nowrap shadow-(--shadow-raised)">
           {label}
         </span>
@@ -241,13 +236,7 @@ function DockButton({
           'border-line-subtle bg-surface-2 grid size-(--dock-icon-size) origin-bottom scale-(--magnify,1) place-items-center rounded-xl border',
           'text-ink-muted transition-[transform,scale,color,border-color,box-shadow] duration-(--duration-fast)',
           'group-hover:border-accent-dim group-hover:text-accent group-hover:-translate-y-1 group-hover:shadow-(--glow-soft)',
-          // Подъём — реакция на курсор, а не на фокус: при обходе табуляцией
-          // иконки прыгали бы одна за другой. Клавиатуре хватает кольца, рамки
-          // и цвета.
           'group-kbd-focus:border-accent-dim group-kbd-focus:text-accent',
-          // Кольцо рисуется на самом значке, а не на кнопке: в кнопку входит
-          // ещё и точка запущенного приложения, и снизу отступ выходил вдвое
-          // больше, чем с боков.
           'group-kbd-focus:outline-1 group-kbd-focus:outline-offset-2 group-kbd-focus:outline-(--color-focus)',
         )}
       >

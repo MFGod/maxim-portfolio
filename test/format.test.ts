@@ -84,7 +84,6 @@ describe('formatCount', () => {
 
 describe('formatTimestamp', () => {
   it('пишет дату и время фиксированной ширины', () => {
-    // Локальное время: дата строится из тех же частей, что и ожидание.
     const moment = new Date(2026, 7, 20, 9, 5).getTime();
     expect(formatTimestamp(moment)).toBe('20.08.2026 09:05');
   });

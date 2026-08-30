@@ -45,7 +45,7 @@ const commands: Command[] = [
       lines: [
         profile.fullName,
         profile.role,
-        `${profile.location} · ${profile.contacts.map((c) => c.label).join(' · ')}`,
+        `${profile.location}, ${profile.contacts.map((c) => c.label).join(', ')}`,
       ],
     }),
   },

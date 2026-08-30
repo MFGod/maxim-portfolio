@@ -35,9 +35,7 @@ export function ProjectDetail({ slug }: { slug: string }) {
           <p className="text-ink-muted mt-1.5 text-sm">{project.tagline}</p>
           {position ? (
             <p className="text-2xs text-ink-faint mt-3 font-mono">
-              {position.company}
-              <span className="mx-1.5">·</span>
-              {formatPeriod(position.period)}
+              {position.company}, {formatPeriod(position.period)}
             </p>
           ) : null}
         </header>

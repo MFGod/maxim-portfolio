@@ -29,8 +29,6 @@ describe('покой мира', () => {
   });
 
   it('пороги идут по возрастанию', () => {
-    // Иначе облёт включался бы раньше поворота и ступень «дышащего кадра»
-    // пропадала бы вовсе.
     expect(DRIFT_AFTER).toBeLessThan(REST_AFTER);
   });
 });
@@ -42,7 +40,6 @@ describe('поворот взгляда в покое', () => {
   });
 
   it('трогается с нуля, а не рывком', () => {
-    // Рывок ровно на двадцатой секунде читается сбоем, а не движением.
     expect(driftYaw(DRIFT_AFTER, FRAME)).toBe(0);
     expect(driftYaw(DRIFT_AFTER + 0.5, FRAME)).toBeGreaterThan(0);
   });
@@ -63,7 +60,6 @@ describe('поворот взгляда в покое', () => {
   });
 
   it('скорость не зависит от частоты кадров', () => {
-    // За секунду поворот один и тот же, сколькими бы кадрами её ни набрали.
     const idle = DRIFT_AFTER + DRIFT_EASE + 1;
     const oneStep = driftYaw(idle, 1);
     const sixty = Array.from({ length: 60 }, () => driftYaw(idle, FRAME)).reduce(

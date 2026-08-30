@@ -108,11 +108,6 @@ describe('losingSide', () => {
 
 describe('расстановка', () => {
   it('перед сходом невредимая сторона стоит на своей линии выхода', () => {
-    /*
-     * В каждом круге одна сторона поднимается там, где её положили в прошлом:
-     * в первом круге это нежить (`losingSide(0) === -1`). Поэтому далеко стоят
-     * живые, а нежить — уже на линии схода.
-     */
     expect(along(PERIOD + RISE, knight)).toBeGreaterThan(0.6);
     expect(Math.abs(along(PERIOD + RISE, undeadWarrior))).toBeLessThan(0.1);
   });
@@ -122,7 +117,6 @@ describe('расстановка', () => {
       along(PHASES.rise + PHASES.approach - 0.01, knight) -
       along(PHASES.rise + PHASES.approach - 0.01, undeadWarrior);
 
-    // Зазор между противниками — около полутора ростов фигуры.
     expect(gap).toBeGreaterThan(0.08);
     expect(gap).toBeLessThan(0.2);
   });
@@ -149,7 +143,6 @@ describe('расстановка', () => {
   });
 
   it('бойцы смотрят на противника', () => {
-    // Фронт вдоль оси Z: нежить смотрит на +Z, живые на -Z.
     expect(Math.cos(battleStep(battle, undeadWarrior, MELEE).heading)).toBeCloseTo(
       1,
       6,
@@ -160,7 +153,6 @@ describe('расстановка', () => {
 
 describe('позы', () => {
   it('идут в сближение шагом', () => {
-    // Первый круг: живые невредимы и идут навстречу поднявшейся нежити.
     expect(battleStep(battle, knight, PERIOD + APPROACH).pose.clip).toBe('Walking_A');
   });
 
@@ -173,7 +165,6 @@ describe('позы', () => {
     }
 
     expect(poses).toEqual(new Set(['Blocking', 'Interact']));
-    // Выпад уносит бойца вперёд, но не насквозь: не глубже 4 см.
     const clash = Math.min(...depths.map(Math.abs));
     expect(Math.max(...depths) - -clash).toBeLessThan(0.04);
   });
@@ -191,7 +182,6 @@ describe('позы', () => {
   });
 
   it('проигравшие падают и остаются лежать, победители торжествуют', () => {
-    // В нулевом круге падает нежить.
     expect(losingSide(0)).toBe(-1);
     expect(battleStep(battle, undeadWarrior, FALL).pose.clip).toBe('Lie_Idle');
     expect(battleStep(battle, knight, FALL).pose.clip).toBe('Cheer');
@@ -209,7 +199,6 @@ describe('позы', () => {
   });
 
   it('живой встаёт падением, пущенным назад', () => {
-    // В первом круге падают живые, значит во втором они поднимаются.
     expect(losingSide(1)).toBe(1);
     const pose = battleStep(battle, knight, 2 * PERIOD + 1).pose;
     expect(pose).toEqual({ clip: 'Death_A_Pose', loop: false, reverse: true });
@@ -218,9 +207,7 @@ describe('позы', () => {
 
 describe('круг замкнут', () => {
   it('победители возвращаются на свою линию выхода', () => {
-    // Нулевой круг выигрывают живые: к концу круга они снова далеко от схода.
     expect(along(RETREAT, knight)).toBeGreaterThan(0.6);
-    // К самому концу круга — ровно на линии выхода: с неё он и пойдёт заново.
     expect(along(PERIOD - 0.001, knight)).toBeCloseTo(along(PERIOD + RISE, knight), 3);
   });
 
@@ -253,7 +240,6 @@ describe('круг замкнут', () => {
 
 describe('battleRadius', () => {
   it('охватывает и линию выхода, и края шеренги', () => {
-    // Дальше линии выхода никто не отходит, шире края шеренги не встаёт.
     const radius = battleRadius(battle);
     for (let t = 0; t < PERIOD; t += 0.5) {
       for (const step of battleSteps(battle, t)) {
@@ -269,7 +255,6 @@ describe('battleRadius', () => {
 describe('battleView', () => {
   it('ставит камеру сбоку от фронта, а не за спиной у стороны', () => {
     const view = battleView(battle);
-    // Фронт этой стычки идёт по оси Z, значит камера уходит по X.
     expect(Math.abs(view.at[0] - battle.at[0])).toBeGreaterThan(clashRadius(battle));
     expect(Math.abs(view.at[2] - battle.at[2])).toBeLessThan(0.01);
   });
@@ -285,10 +270,7 @@ describe('battleView', () => {
     const view = battleView(battle);
     const away = Math.hypot(view.at[0] - battle.at[0], view.at[2] - battle.at[2]);
 
-    // Дальше схватки: иначе крайняя пара оказывается за спиной у камеры.
     expect(away).toBeGreaterThan(clashRadius(battle));
-    // Но ближе, чем вся площадка с линиями выхода: там фигура — двадцать
-    // пикселей, и разглядеть в ней бой нельзя.
     expect(away).toBeLessThan(battleRadius(battle));
   });
 
@@ -306,7 +288,6 @@ describe('battleView', () => {
   });
 
   it('поворот фронта разворачивает и ракурс', () => {
-    // Фронт вдоль оси X: камера должна уйти по Z.
     const turned: WorldBattle = { ...battle, facing: Math.PI / 2 };
     const view = battleView(turned);
     expect(Math.abs(view.at[0] - battle.at[0])).toBeLessThan(0.01);
@@ -341,8 +322,6 @@ describe('worldBattles', () => {
     for (const battle of worldBattles) {
       for (const side of [battle.undead, battle.living]) {
         expect(side.models.length).toBeGreaterThan(1);
-        // Маг стоит вторым рядом и не бьётся врукопашную: второй такой оставил
-        // бы шеренгу без половины бойцов.
         expect(side.models.filter((model) => model.endsWith('mage'))).toHaveLength(1);
       }
     }
@@ -351,7 +330,6 @@ describe('worldBattles', () => {
   it('площадки лежат над водой и почти ровные', () => {
     for (const battle of worldBattles) {
       expect(battle.at[1], battle.id).toBeGreaterThan(SEA_LEVEL);
-      // Наклон в десятую долю — это уже склон, по нему строй не встанет.
       expect(Math.hypot(battle.slope[0], battle.slope[1]), battle.id).toBeLessThan(0.1);
     }
   });
@@ -369,7 +347,6 @@ describe('worldBattles', () => {
         const one = worldBattles[i]!;
         const other = worldBattles[k]!;
         const away = Math.hypot(one.at[0] - other.at[0], one.at[2] - other.at[2]);
-        // Площадки не должны накладываться друг на друга даже краями.
         expect(away, `${one.id} и ${other.id}`).toBeGreaterThan(
           battleRadius(one) + battleRadius(other),
         );
@@ -388,8 +365,6 @@ describe('снаряды магов', () => {
   const midMelee = clash + PHASES.melee / 2;
 
   it('до схода и после падения маг не стреляет', () => {
-    // До схода он ещё идёт, после — либо падает, либо ликует. Снаряд из
-    // ликующего мага читался бы добиванием лежачего.
     expect(battleBolts(battle, 1)).toHaveLength(0);
     expect(battleBolts(battle, clash - 0.01)).toHaveLength(0);
     expect(battleBolts(battle, clash + PHASES.melee + 0.5)).toHaveLength(0);
@@ -402,12 +377,10 @@ describe('снаряды магов', () => {
       for (const bolt of battleBolts(battle, clash + step / 20)) shots.add(bolt.id);
     }
 
-    // Два мага, у каждого шесть с лишним выстрелов за двадцать одну секунду.
     expect(shots.size).toBeGreaterThanOrEqual(10);
   });
 
   it('в воздухе у мага не больше одного снаряда', () => {
-    // Полёт короче периода: иначе снаряды идут вереницей и читаются очередью.
     expect(BOLT_FLIGHT).toBeLessThan(CAST);
 
     for (let step = 0; step < PHASES.melee * 10; step++) {
@@ -419,10 +392,6 @@ describe('снаряды магов', () => {
   });
 
   it('снаряд летит от мага к чужой шеренге, а не наоборот', () => {
-    /*
-     * Фронт этой стычки идёт по оси Z: нежить стоит на -Z, живые на +Z.
-     * Снаряд нежити обязан двигаться в сторону +Z по ходу полёта.
-     */
     const track: { part: number; z: number }[] = [];
 
     for (let step = 0; step <= 10; step++) {
@@ -460,17 +429,12 @@ describe('снаряды магов', () => {
   });
 
   it('снаряд летит на высоте бойца, а не по земле', () => {
-    /*
-     * Снаряд живёт полсекунды из трёх с лишним, поэтому высоты собираются по
-     * всей фазе размена: взятый наугад миг чаще всего застаёт пустое небо.
-     */
     let seen = 0;
 
     for (let step = 0; step < PHASES.melee * 20; step++) {
       for (const bolt of battleBolts(battle, clash + step / 20)) {
         const above = bolt.y - battle.at[1];
 
-        // Между поясом и макушкой: снаряд у щиколоток читается искрой на траве.
         expect(above).toBeGreaterThan(0.117 * 0.4);
         expect(above).toBeLessThan(0.117 * 1.1);
         seen++;
@@ -481,16 +445,10 @@ describe('снаряды магов', () => {
   });
 
   it('тот же миг даёт те же снаряды', () => {
-    // Бой вычисляется из времени, а не копится состоянием: пауза и сон
-    // ноутбука не должны рвать полёт.
     expect(battleBolts(battle, midMelee)).toEqual(battleBolts(battle, midMelee));
   });
 
   it('стороны стреляют вразнобой', () => {
-    /*
-     * Сдвиг на полпериода: без него оба снаряда всегда встречаются ровно
-     * посередине, и размен читается пинг-понгом.
-     */
     let together = 0;
     let apart = 0;
 
@@ -536,11 +494,6 @@ describe('падение приходит от противника', () => {
   });
 
   it('мага роняет снаряд: прилёт совпадает с падением', () => {
-    /*
-     * Маг стоит вторым рядом, и мечом его не достать. Единственная причина
-     * его падения — добивающий снаряд вражеского мага, и он обязан прилететь
-     * ровно тогда, когда маг валится, а не «где-то в той же фазе».
-     */
     const down = fallsAt(undeadMage);
     const shots: { part: number; at: number }[] = [];
 
@@ -561,7 +514,6 @@ describe('падение приходит от противника', () => {
   it('победитель не ликует, пока его противник на ногах', () => {
     const down = fallsAt(undeadWarrior);
 
-    // За полсекунды до падения врага рыцарь ещё в бою, а не в победной позе.
     const before = battleStep(battle, knight, base + melee + down - 0.5).pose.clip;
     const after = battleStep(battle, knight, base + melee + down + 0.5).pose.clip;
 
@@ -570,11 +522,6 @@ describe('падение приходит от противника', () => {
   });
 
   it('добивающий выпад приходится на миг падения врага', () => {
-    /*
-     * Выпад — единственное движение удара, какое есть в моделях: клипа взмаха
-     * в них не оставили. Значит момент попадания читается только глубиной
-     * выпада, и она обязана быть наибольшей там, где враг падает.
-     */
     const down = fallsAt(undeadWarrior);
     const depthAt = (offset: number): number => {
       const step = battleStep(battle, knight, base + melee + down + offset);

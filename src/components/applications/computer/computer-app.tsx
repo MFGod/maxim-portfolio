@@ -27,7 +27,6 @@ function sameLocation(a: Location, b: Location): boolean {
 }
 
 export function ComputerApp() {
-  // История общая на всё окно: «Назад» возвращает и в папку, и в «Программы».
   const navigation = useNavigationHistory<Location>(START, sameLocation);
   const location = navigation.current;
 

@@ -47,10 +47,6 @@ function decode(member: string, score: number): ScoreEntry | null {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Upstash Redis по REST: обычный fetch, без клиентской библиотеки             */
-/* -------------------------------------------------------------------------- */
-
 type UpstashConfig = { url: string; token: string };
 
 function upstashConfig(): UpstashConfig | null {
@@ -122,7 +118,6 @@ function createUpstashStore({ url, token }: UpstashConfig): ArcadeStore {
         ['ZREMRANGEBYRANK', key, 0, -(BOARD_CAPACITY + 1)],
         ['ZREVRANK', key, member],
       ]);
-      // Вылетел из запаса сразу после записи — места в таблице у него нет.
       return typeof rank === 'number' ? rank + 1 : null;
     },
 
@@ -142,10 +137,6 @@ function createUpstashStore({ url, token }: UpstashConfig): ArcadeStore {
     },
   };
 }
-
-/* -------------------------------------------------------------------------- */
-/* Запасной драйвер: держит таблицу в памяти инстанса                          */
-/* -------------------------------------------------------------------------- */
 
 function createMemoryStore(): ArcadeStore {
   const boards = new Map<GameId, ScoreEntry[]>();

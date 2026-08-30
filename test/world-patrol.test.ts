@@ -20,7 +20,6 @@ const corner = [
 
 describe('routeLength', () => {
   it('меряет длину по горизонтали, не считая подъёма', () => {
-    // Второе звено поднимается на юнит, но в длину идёт только его горизонталь.
     expect(routeLength(corner)).toBe(4);
   });
 
@@ -35,7 +34,6 @@ describe('foldDistance', () => {
   });
 
   it('за концом маршрута разворачивается', () => {
-    // Прошли 5 при длине 4: юнит назад от конца, лицом к началу.
     expect(foldDistance(5, 4)).toEqual({ at: 3, forward: false });
   });
 
@@ -44,7 +42,6 @@ describe('foldDistance', () => {
   });
 
   it('отрицательное расстояние отстающего не ломает счёт', () => {
-    // Отстающий на старте: −1 при длине 4 — это юнит от начала на пути назад.
     expect(foldDistance(-1, 4)).toEqual({ at: 1, forward: false });
   });
 
@@ -57,7 +54,6 @@ describe('stepAt', () => {
   it('идёт по звеньям, а не по прямой между концами', () => {
     const step = stepAt(corner, 3);
 
-    // Три юнита пути: два по первому звену, один по второму.
     expect(step.x).toBeCloseTo(1, 6);
     expect(step.z).toBeCloseTo(2, 6);
     expect(step.y).toBeCloseTo(1.5, 6);
@@ -69,7 +65,6 @@ describe('stepAt', () => {
   });
 
   it('на обратном ходу смотрит назад', () => {
-    // ±π — один и тот же курс: сравниваем по модулю, иначе тест ловит знак.
     expect(Math.abs(stepAt(straight, 1, false).heading)).toBeCloseTo(Math.PI, 6);
   });
 
@@ -84,7 +79,6 @@ describe('walkerStep', () => {
     const first = walkerStep(straight, 4, 0, 0.5, 0.4, 3);
     const second = walkerStep(straight, 4, 1, 0.5, 0.4, 3);
 
-    // Ячейка ноль — хвост строя: номер растёт в сторону хода.
     expect(second.z - first.z).toBeCloseTo(0.4, 6);
   });
 
@@ -93,7 +87,6 @@ describe('walkerStep', () => {
     const walkers = 3;
     let ближе = Infinity;
 
-    // Полный круг «туда и обратно» с мелким шагом: разворот попадает внутрь.
     for (let t = 0; t < 40; t += 0.05) {
       const места = [0, 1, 2].map((i) =>
         walkerStep(straight, t, i, 0.5, spacing, walkers),
@@ -143,16 +136,12 @@ describe('walkerStep', () => {
 describe('данные дозоров', () => {
   it('маршруты длинные и не выходят за карту', () => {
     for (const patrol of worldPatrols) {
-      // Лента дорог рваная: куски длиннее десяти юнитов наперечёт, а после
-      // отсечения мест, где идущий тонет в ступени, остаются и совсем
-      // короткие. Два с половиной юнита — это два десятка ростов фигуры.
       expect(routeLength(patrol.route)).toBeGreaterThan(2.5);
       for (const [x, y, z] of patrol.route) {
         expect(x).toBeGreaterThan(-48);
         expect(x).toBeLessThan(72);
         expect(z).toBeGreaterThan(-77);
         expect(z).toBeLessThan(39);
-        // Уровень моря 0,09: ни одна точка маршрута не должна быть в воде.
         expect(y).toBeGreaterThan(0.09);
       }
     }
@@ -164,16 +153,12 @@ describe('данные дозоров', () => {
         let closest = Infinity;
         for (const a of worldPatrols[i]!.route)
           for (const b of worldPatrols[j]!.route) {
-            // Расстояние берём объёмное: драконы ходят над теми же местами,
-            // но на высоте девяти юнитов — это не встреча.
             closest = Math.min(
               closest,
               Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]),
             );
           }
 
-        // Четыре юнита — тридцать четыре роста фигуры: группы не пересекутся
-        // ни в одной точке своих ходок.
         expect(
           closest,
           `«${worldPatrols[i]!.id}» и «${worldPatrols[j]!.id}» сходятся`,
@@ -194,8 +179,6 @@ describe('данные дозоров', () => {
         const to = patrol.route[i]!;
         const climb = Math.abs(to[1] - from[1]);
 
-        // 0,35 юнита — три роста фигуры. Больше означает, что замер провалился
-        // в дыру в ленте дороги и строй уйдёт под землю.
         expect(climb, `ступень между ${from} и ${to}`).toBeLessThan(0.35);
       }
     }
@@ -203,7 +186,6 @@ describe('данные дозоров', () => {
 
   it('звенья не тянутся через полкарты', () => {
     for (const patrol of worldPatrols) {
-      // Драконы летают по кругу из шестнадцати точек — им частота ни к чему.
       if (patrol.id.startsWith('дракон')) continue;
 
       for (let i = 1; i < patrol.route.length; i++) {
@@ -211,15 +193,6 @@ describe('данные дозоров', () => {
         const to = patrol.route[i]!;
         const шаг = Math.hypot(to[0] - from[0], to[2] - from[2]);
 
-        /*
-         * Юнит — восемь ростов фигуры. Раньше здесь стоял предел в 0,35 как
-         * замена настоящей проверке: на редкой ломаной прямая между точками
-         * режет бугор. Теперь ломаную ставит запекание по ленте дороги
-         * (`dev-patrols.ts`), и оно проверяет это прямо — шагом 2 см по всей
-         * длине, по самой ленте. Частота точек перестала быть признаком: на
-         * прямом и ровном куске лишние точки только раздувают данные. Предел
-         * остаётся сторожем от бессмыслицы вроде потерянной середины маршрута.
-         */
         expect(шаг, `звено ${from} → ${to}`).toBeLessThan(1);
       }
     }

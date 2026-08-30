@@ -20,7 +20,6 @@ const make = (kind: FileNode['kind'], parentId: string | null = null): FileNode 
 describe('create', () => {
   it('не создаёт узел глубже предела: разбор хранилища его всё равно поднимет', () => {
     let parent: string | null = null;
-    // Ровно предел: каждый уровень создаётся, последний лежит на глубине 8.
     for (let level = 0; level < FILE_LIMITS.depth; level += 1) {
       const created: FileNode | null = fileStore.create('folder', parent);
       expect(created).not.toBeNull();
@@ -81,7 +80,6 @@ describe('moveMany', () => {
     const target = make('folder');
     const file = make('text');
 
-    // Папку внутрь самой себя не положить, а файл рядом с ней — можно.
     const moved = fileStore.moveMany([target.id, file.id], target.id);
 
     expect(moved).toEqual([file.id]);
@@ -113,7 +111,6 @@ describe('буфер обмена', () => {
     expect(fileStore.paste(target.id)).toBe(true);
 
     expect(childrenOf(nodes(), target.id)).toHaveLength(2);
-    // Вырезанное вставляется один раз: буфер пуст.
     expect(fileStore.getSnapshot().clipboard).toBeNull();
   });
 
@@ -125,7 +122,6 @@ describe('буфер обмена', () => {
     fileStore.setClipboard({ ids: [folder.id, file.id], mode: 'copy' });
     expect(fileStore.paste(null)).toBe(true);
 
-    // Было: папка с файлом внутри и файл рядом. Стало: то же самое дважды.
     expect(childrenOf(nodes(), null)).toHaveLength(4);
     expect(Object.keys(nodes())).toHaveLength(6);
   });
@@ -137,14 +133,11 @@ describe('буфер обмена', () => {
 
     fileStore.setClipboard({ ids: [folder.id, file.id], mode: 'copy' });
 
-    // Папку нельзя скопировать внутрь собственного потомка — значит, нельзя
-    // вставить и всю группу: половина буфера читалась бы как потеря файлов.
     expect(fileStore.canPaste(inner.id)).toBe(false);
     expect(fileStore.paste(inner.id)).toBe(false);
   });
 
   it('не вставляет копию, которая уйдёт глубже предела', () => {
-    // Ветка высотой 5 и приёмник на глубине 4: вместе это 9 при пределе 8.
     let branch = make('folder');
     const top = branch;
     for (let level = 1; level < 5; level += 1) branch = make('folder', branch.id);
@@ -156,7 +149,6 @@ describe('буфер обмена', () => {
 
     expect(fileStore.canPaste(target.id)).toBe(false);
     expect(fileStore.paste(target.id)).toBe(false);
-    // На стол та же ветка ложится: глубина укладывается в предел.
     expect(fileStore.canPaste(null)).toBe(true);
   });
 

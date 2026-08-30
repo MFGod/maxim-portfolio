@@ -73,7 +73,6 @@ export function useFileShortcuts({
       onDelete(selectedFiles);
       return;
     }
-    // Переименование и открытие — только когда выбран ровно один объект.
     if (event.key === 'F2' && single) {
       event.preventDefault();
       onRename(single);

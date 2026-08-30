@@ -38,11 +38,9 @@ export function DesktopIcons() {
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
 
-  // Размер значка — настройка: от него зависят и раскладка, и попадания.
   const iconSize = useSetting((current) => current.files.iconSize);
   const metrics = useMemo(() => iconMetrics(iconSize), [iconSize]);
 
-  // Файлы читаются из хранилища один раз за загрузку страницы.
   useEffect(() => fileStore.hydrate(), []);
 
   const entries = useMemo<DesktopEntry[]>(
@@ -74,15 +72,11 @@ export function DesktopIcons() {
     desktopIconStore.getServerOrderSnapshot,
   );
 
-  // Раскладка по умолчанию нужна до гидратации хранилища и как запасной вариант.
-  // Мемоизация здесь по делу: рамка выделения меняет состояние на каждом кадре
-  // жеста, а раскладка от неё не зависит.
   const fallback = useMemo(
     () => defaultPositions(ids, workspace, metrics),
     [ids, metrics, workspace],
   );
 
-  // Синхронизируем до отрисовки, иначе сохранённые позиции заметно прыгнут.
   useIsomorphicLayoutEffect(() => {
     desktopIconStore.sync(ids, workspace, metrics);
   }, [ids, metrics, workspace]);
@@ -155,8 +149,6 @@ export function DesktopIcons() {
         );
       }}
     >
-      {/* Рамка выделения. Внутри списка её держит `li`: `div` здесь был бы
-          недопустимым потомком `ul`. */}
       <li aria-hidden>
         <div
           ref={marqueeBoxRef}

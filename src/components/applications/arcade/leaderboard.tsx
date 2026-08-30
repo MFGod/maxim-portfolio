@@ -150,7 +150,7 @@ function Table({
             {t('arcade.board.you')}
           </span>
           <span className="text-accent flex-1 text-right font-mono text-xs tabular-nums">
-            {own.rank === null ? t('arcade.result.outsideTop') : `#${own.rank}`} ·{' '}
+            {own.rank === null ? t('arcade.result.outsideTop') : `#${own.rank}`},{' '}
             {own.score}
           </span>
         </div>

@@ -184,8 +184,6 @@ export function stepSimulation(state: LayoutState): LayoutState {
       fj.y -= dy * push;
       fj.z -= dz * push;
 
-      // Карточки перекрываются на экране, а не в пространстве: расталкиваем их
-      // в плоскости, глубина в расчёт не идёт.
       if (Math.abs(dz) > GAP_Z) continue;
 
       const gapX = (nodes[i]!.radius + nodes[j]!.radius) * state.spacing;

@@ -38,8 +38,6 @@ export function ItemTile({ item, view }: { item: BrowserItem; view: ItemView }) 
           cut && 'opacity-50',
         )}
       >
-        {/* Поле правки имени не может жить внутри `button`: такая вложенность
-            недопустима, и браузер не отдаёт полю ни фокус, ни ввод. */}
         {renaming && item.kind === 'file' ? (
           <div className="flex size-full flex-col items-center justify-center gap-(--icon-gap) p-(--icon-pad) text-center">
             <IconBadge icon={iconFor(item)} accent={item.node.kind === 'folder'} />
@@ -156,7 +154,6 @@ export function RenameInput({ node, onDone }: { node: FileNode; onDone: () => vo
     const input = inputRef.current;
     if (!input) return;
     input.focus({ preventScroll: true });
-    // Расширение выделять не нужно: правят обычно имя.
     const { base } = splitName(node.name, node.kind);
     input.setSelectionRange(0, base.length);
   }, [node.kind, node.name]);

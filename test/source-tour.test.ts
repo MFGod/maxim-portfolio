@@ -23,8 +23,6 @@ function dedent(code: string): string {
  * Ищет фрагмент в файле по содержимому: берёт окно той же высоты на каждой
  * строке и сравнивает после дедента. Номер строки не хранится нигде — правка
  * выше по файлу сдвигает фрагмент, но не ломает витрину.
- *
- * Возвращает номер первой строки найденного фрагмента или `null`.
  */
 function findExcerpt(path: string, excerpt: string): number | null {
   const fileLines = readFileSync(resolve(root, path), 'utf8').split('\n');

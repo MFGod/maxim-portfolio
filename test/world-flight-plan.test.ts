@@ -20,7 +20,6 @@ const twoHills: CeilingProbe = (x) => {
 };
 
 const heightAt = (keys: PathKey[], x: number): number => {
-  // Ищем долю пути, на которой кривая проходит нужную координату.
   for (let step = 0; step <= 400; step++) {
     const pose = samplePath(keys, step / 400);
     if (pose.position[0] >= x) return pose.position[1];
@@ -43,12 +42,10 @@ describe('план перелёта', () => {
     const path = planFlight(from, to, hill);
     expect(path.length).toBeGreaterThan(2);
 
-    // Над серединой холма камера должна идти выше его верхушки.
     expect(heightAt(path, 20)).toBeGreaterThan(8);
   });
 
   it('прямая шла бы сквозь: подъём нужен, а не декоративен', () => {
-    // Без плана камера осталась бы на высоте 2 — внутри восьмиюнитовой башни.
     expect(heightAt([from, to], 20)).toBeCloseTo(2, 1);
   });
 
@@ -60,20 +57,11 @@ describe('план перелёта', () => {
   });
 
   it('не взмывает у самой станции: там объекты стоят вплотную к камере', () => {
-    // Полтора юнита у конца план не трогает: у благодати камера стоит под
-    // кроной, и требовать зазора там значит взмывать сразу после старта.
     const atStation: CeilingProbe = (x) => (x < 1.2 ? 9 : 0);
     expect(planFlight(from, to, atStation)).toEqual([from, to]);
   });
 
   it('слепая зона мерится юнитами, а не долей пути', () => {
-    /*
-     * Доля растёт вместе с перелётом: на шестидесяти юнитах прежние 0.18
-     * ослепляли план на одиннадцать юнитов у каждого конца, и камера входила
-     * в скалу, которую он не искал. Замер давал там рывок в 1607 юнитов в
-     * секунду за секунду. Препятствие в трёх юнитах от станции — уже не «у
-     * самой станции», его надо обходить.
-     */
     const nearby: CeilingProbe = (x) => (x > 2.5 && x < 5 ? 9 : 0);
     expect(planFlight(from, to, nearby).length).toBeGreaterThan(2);
   });
@@ -82,8 +70,6 @@ describe('план перелёта', () => {
     const path = planFlight(from, to, hill);
 
     for (const key of path.slice(1, -1)) {
-      // Направление совпадает с прямым перелётом, а высота — нет: подъём
-      // меняет, где камера, а не куда она смотрит.
       const away = [
         key.look[0] - key.at[0],
         key.look[1] - key.at[1],
@@ -97,8 +83,6 @@ describe('план перелёта', () => {
   });
 
   it('число опор не зависит от изрезанности рельефа', () => {
-    // Опоры снимаются с профиля равномерно, а не по краям каждой кочки:
-    // рябь под путём больше не превращается в десяток изломов.
     const rough: CeilingProbe = (x) => 5 + Math.sin(x) * 2;
     expect(planFlight(from, to, rough)).toHaveLength(8);
     expect(planFlight(from, to, hill)).toHaveLength(8);
@@ -109,8 +93,6 @@ describe('план перелёта', () => {
     const lifts = path.slice(1, -1).map((key) => key.at[1] - from.at[1]);
     const apex = Math.max(...lifts);
 
-    // Опора у станции берёт меньше половины подъёма: остальное добирается
-    // дальше. Взмыть на всю высоту за один шаг — это и был прежний излом.
     expect(lifts[0]!).toBeLessThan(apex / 2);
     expect(lifts.at(-1)!).toBeLessThan(apex / 2);
   });
@@ -123,22 +105,15 @@ describe('план перелёта', () => {
     const apex = Math.max(...lifts);
     const top = lifts.indexOf(apex);
 
-    // Вершина приходится на середину списка опор, а не на его край.
     expect(top).toBeGreaterThan(0);
     expect(top).toBeLessThan(lifts.length - 1);
 
-    // Соседи ниже вершины: это дуга, а не полка с обрывами по бокам.
     expect(lifts[top - 1]!).toBeLessThan(apex);
     expect(lifts[top + 1]!).toBeLessThanOrEqual(apex);
   });
 });
 
-/**
- * Плавность считается по самой кривой: равномерными шагами по длине.
- *
- * Замер до перехода на дугу — скорость гуляла в 2.14 раза, поворот доходил до
- * 2.5° на сотую долю пути. Пороги ниже держат достигнутое.
- */
+/** Плавность считается по самой кривой: равномерными шагами по длине. */
 function smoothness(keys: PathKey[]) {
   const steps = 600;
   const points = Array.from(
@@ -159,7 +134,6 @@ function smoothness(keys: PathKey[]) {
 
   const mean = spans.reduce((sum, span) => sum + span, 0) / spans.length;
 
-  // Радиус поворота: чем он меньше, тем сильнее камеру уводит вбок.
   let radius = Infinity;
   for (let index = 1; index < steps; index++) {
     const start = points[index - 1]!;
@@ -202,17 +176,6 @@ describe('плавность пути', () => {
     });
 
     it(`${name}: путь идёт без углов`, () => {
-      /*
-       * Порог по радиусу поворота, а не по градусам: градус зависит от шага
-       * выборки, радиус — нет. При скорости 8.25 юнита в секунду радиус в 2.5
-       * юнита даёт около 27 юнитов в секунду за секунду вбок — предел, за
-       * которым камеру уже видно, что «кидает».
-       *
-       * Замер на этих же пробах: было 8.6 / 1.65 / 8.6, стало 4.1 / 5.5 / 2.9.
-       * Прежний код на двух препятствиях заваливался в 1.65 — вот это и было
-       * рывком; на одиноком шпиле он, наоборот, размазывал подъём на весь
-       * перелёт, отчего камера всплывала над станцией ещё до препятствия.
-       */
       expect(smoothness(planFlight(from, to, probe)).radius).toBeGreaterThan(2.5);
     });
 

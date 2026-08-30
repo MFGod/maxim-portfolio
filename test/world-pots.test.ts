@@ -38,7 +38,6 @@ function potsMesh(count = PLACES.length): THREE.InstancedMesh {
 
   for (let i = 0; i < count; i++) {
     const place = PLACES[i % PLACES.length]!;
-    // Наклоны разные и не вокруг Y: прыжок обязан их сохранить.
     quaternion.setFromEuler(
       new THREE.Euler(0.4 + i * 0.3, 1.1 + i * 0.7, -0.6 + i * 0.2),
     );
@@ -91,7 +90,6 @@ describe('attachPots', () => {
 
     const after = positionAt(pots, 0);
     expect(after.y - before.y).toBeCloseTo(POT_HEIGHT * HOP_HEIGHT_FACTOR, 6);
-    // По горизонтали горшок не сдвинулся: прыжок вертикальный.
     expect(after.x).toBeCloseTo(before.x, 6);
     expect(after.z).toBeCloseTo(before.z, 6);
   });
@@ -111,15 +109,12 @@ describe('attachPots', () => {
     const before = positionAt(pots, 3);
     const world = attachPots(scene)!;
 
-    // Три десятка прыжков: доворот к этому моменту накопился заметный.
     world.update(restTime(3) + potCycle(3).period * 30);
 
     const after = matrixAt(pots, 3);
     const moved = new THREE.Vector3().setFromMatrixPosition(after);
-    // Горшок далеко от начала координат — поворот вокруг общей оси увёз бы его.
     expect(moved.distanceTo(before)).toBeCloseTo(0, 9);
 
-    // Наклон свой, доворот — только вокруг Y: ось Y горшка не изменилась.
     const basis = new THREE.Matrix4().extractRotation(after);
     const up = new THREE.Vector3(0, 1, 0).applyMatrix4(basis);
     const wasUp = new THREE.Vector3(0, 1, 0).applyEuler(
@@ -134,7 +129,6 @@ describe('attachPots', () => {
     const before = [0, 1, 2, 3].map((i) => positionAt(pots, i).y);
     const world = attachPots(scene)!;
 
-    // Ищем момент, когда высоты хоть у кого-то разошлись.
     world.update(peakTime(0));
     const lifted = [0, 1, 2, 3].map(
       (i, index) => positionAt(pots, i).y - before[index]!,
@@ -158,7 +152,6 @@ describe('attachPots', () => {
     world.update(0.016);
     expect(Array.from(pots.instanceMatrix.array)).toEqual(Array.from(before));
 
-    // Второй кадр покоя буфер не переписывает.
     const version = pots.instanceMatrix.version;
     world.update(0.016);
     expect(pots.instanceMatrix.version).toBe(version);

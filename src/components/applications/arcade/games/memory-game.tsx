@@ -110,7 +110,6 @@ export function MemoryGame({ onFinish }: GameProps) {
     runRef.current += 1;
     sequenceRef.current = createSequence(1, Math.random);
     void show(sequenceRef.current, 1, runRef.current);
-    // Смена поколения обрывает показ, начатый этим запуском эффекта.
     return () => {
       runRef.current += 1;
     };
@@ -131,14 +130,9 @@ export function MemoryGame({ onFinish }: GameProps) {
       return;
     }
 
-    // Шаг засчитывается сразу, а не после вспышки: между ними игрок успевает
-    // нажать следующую плитку, и она сравнивалась бы с уже пройденной.
     stepRef.current += 1;
     const roundComplete = stepRef.current >= sequenceRef.current.length;
 
-    // Раунд пройден — приём ввода закрывается сейчас же. Иначе лишнее нажатие
-    // в паузе перед показом сверялось бы с концом последовательности и
-    // засчитывалось как ошибка.
     if (roundComplete) setPhase('watch');
 
     setLit(tile);

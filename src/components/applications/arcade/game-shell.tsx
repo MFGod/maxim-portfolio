@@ -77,7 +77,6 @@ export function GameShell({ game }: { game: GameDefinition }) {
     setFailure(null);
     setSaveStatus('idle');
 
-    // Отказ выдачи токена не отменяет партию: сыграть можно, сохранить нельзя.
     const issued = await openRun(game.id).catch(() => null);
     if (!alive.current) return;
 

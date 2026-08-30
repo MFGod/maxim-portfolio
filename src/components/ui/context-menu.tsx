@@ -43,13 +43,9 @@ export function ContextMenu({
 }: MenuState & { onClose: () => void }) {
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x, y });
-  // Подложка начинает ловить нажатия только со следующего кадра: порядок
-  // событий правой кнопки зависит от системы, и `pointerdown` того же жеста
-  // иначе закрыл бы меню сразу после открытия.
   const [armed, setArmed] = useState(false);
   const enabled = items.filter((item) => !item.disabled);
 
-  // Меню держится в пределах экрана: у нижнего края разворачивается вверх.
   useEffect(() => {
     const node = nodeRef.current;
     if (!node) return;
@@ -82,7 +78,6 @@ export function ContextMenu({
 
   return createPortal(
     <div
-      // Подложка ловит клик мимо меню и правый клик по другому месту.
       className="fixed inset-0 z-(--z-menu)"
       onPointerDown={() => {
         if (armed) onClose();

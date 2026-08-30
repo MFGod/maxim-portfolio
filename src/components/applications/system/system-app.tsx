@@ -63,7 +63,7 @@ export function SystemApp() {
             {systemInfo.name}
           </h2>
           <p className="text-ink-muted text-sm">
-            {systemInfo.tagline} · версия {systemInfo.version}
+            {systemInfo.tagline}, версия {systemInfo.version}
           </p>
         </div>
       </div>

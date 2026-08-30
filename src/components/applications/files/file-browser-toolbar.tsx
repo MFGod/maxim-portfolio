@@ -78,8 +78,6 @@ export function FileBrowserToolbar({
       </div>
 
       {showPath ? (
-        // Путь не сжимается ниже читаемого: на узком окне на новую строку
-        // уходит группа кнопок справа, а не название текущей папки.
         <nav
           aria-label="Путь"
           className="flex min-w-32 flex-1 items-center gap-1 overflow-hidden"
@@ -104,11 +102,7 @@ export function FileBrowserToolbar({
         </span>
       )}
 
-      {/* Правая половина панели переносится целиком: разорванная на части,
-          она перемешалась бы с путём. */}
       <div className="ml-auto flex items-center gap-2">
-        {/* Сколько объектов затронет следующее действие. Подсказка из
-            рекомендаций Microsoft к спискам с множественным выделением. */}
         {counts.selected > 1 ? (
           <span className="text-2xs text-accent shrink-0 font-mono">
             выделено: {counts.selected}

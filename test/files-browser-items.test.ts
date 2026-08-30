@@ -69,8 +69,6 @@ describe('groupsOf', () => {
     const groups = groupsOf(items, 'kind');
 
     expect(groups.length).toBeGreaterThan(1);
-    // Из групп можно собрать исходный список без потерь: по ним идут
-    // Shift-диапазон и Ctrl+A.
     expect(groups.flatMap((group) => group.items)).toHaveLength(items.length);
   });
 });

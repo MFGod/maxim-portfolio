@@ -81,7 +81,6 @@ export function useMarquee<Box extends HTMLElement = HTMLDivElement>({
     const box = boxRef.current;
     if (!container || !box) return;
 
-    // Нажатие на плитке — это её выделение или перетаскивание, не рамка.
     const target = event.target;
     if (target instanceof Element && target.closest(`[${SELECT_KEY_ATTRIBUTE}]`)) {
       return;
@@ -129,8 +128,6 @@ export function useMarquee<Box extends HTMLElement = HTMLDivElement>({
     };
 
     const finish = (commit: boolean) => {
-      // Флаг снимается первым и без условий: осечка в уборке не должна
-      // запретить следующий жест.
       activeRef.current = false;
 
       if (frame) cancelAnimationFrame(frame);
@@ -160,9 +157,6 @@ export function useMarquee<Box extends HTMLElement = HTMLDivElement>({
       finish(false);
     };
 
-    // Захват указателя — оптимизация: он держит события на узле, если курсор
-    // ушёл за его границы. Браузер вправе отказать, и тогда жест продолжается
-    // по событиям окна — на них он и подписан.
     try {
       handle.setPointerCapture(pointerId);
     } catch {

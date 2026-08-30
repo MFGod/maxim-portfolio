@@ -186,8 +186,6 @@ describe('вход', () => {
     const top = Math.max(...heights);
     const topIndex = heights.indexOf(top);
 
-    // Верхняя точка внутри пути, а не на его концах: иначе это не дуга, а
-    // взлёт или пикирование.
     expect(topIndex).toBeGreaterThan(0);
     expect(topIndex).toBeLessThan(heights.length - 1);
 
@@ -209,12 +207,6 @@ describe('вход', () => {
 
 describe('карманы оболочки', () => {
   it('карман строится под каждый утверждённый ракурс и под каждую стычку', () => {
-    /*
-     * Стычки тоже объявляют себя проходимыми: купол держит камеру в трети
-     * юнита над рельефом, а бойцы ростом 0,117 с этой высоты — десяток
-     * пикселей. Без кармана «перенести камеру к стычке» показывает поляну,
-     * а не бой.
-     */
     expect(worldPockets().length).toBe(allShots().length + worldBattles.length);
     expect(battlePockets().length).toBe(worldBattles.length);
   });

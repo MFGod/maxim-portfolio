@@ -40,8 +40,6 @@ export function writeStorage(key: string, value: string): boolean {
     store.setItem(key, value);
     return true;
   } catch {
-    // Чаще всего это переполненная квота. Данные в памяти уже верные,
-    // потеряется только их восстановление после перезагрузки.
     return false;
   }
 }

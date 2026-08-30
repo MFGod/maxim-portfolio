@@ -52,7 +52,7 @@ export function ChapterList() {
           <li key={chapter.positionId}>
             <p className="text-2xs text-ink-faint font-mono">
               {position ? formatPeriod(position.period) : null}
-              {chapter.branch ? <span className="ml-1.5">· ответвление</span> : null}
+              {chapter.branch ? <span className="ml-1.5">(ответвление)</span> : null}
             </p>
             <h3 className="text-ink font-display text-lg leading-snug">
               {companyOf(chapter.positionId)}
@@ -61,11 +61,6 @@ export function ChapterList() {
             <ul className="mt-2 flex flex-wrap gap-1.5">
               {chapter.projects.map((project) => (
                 <li key={project.slug}>
-                  {/*
-                    Ссылка, а не кнопка окна: страница мира живёт вне рабочего
-                    стола, оконного менеджера здесь нет. Маршрут проекта откроет
-                    его карточку сам.
-                  */}
                   <Link
                     href={`/projects/${project.slug}`}
                     className="border-line-subtle bg-surface-2 text-2xs text-ink-muted hover:border-accent-dim hover:bg-accent-wash hover:text-accent rounded-sm border px-2 py-1 transition-colors duration-(--duration-fast)"
@@ -94,7 +89,6 @@ export function WorldPlan({ support }: { support: WorldSupport }) {
 
   return (
     <>
-      {/* План декоративен: тем же данным ниже есть доступная разметка. */}
       <svg
         viewBox={PLAN_VIEWBOX}
         aria-hidden

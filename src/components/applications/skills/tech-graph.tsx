@@ -44,19 +44,12 @@ type Props = {
 /**
  * Граф технологий: шар из карточек, который вращается сам, отзывается на жесты
  * и раскладывается силовой симуляцией.
- *
- * Кадр рисует `useGraphPainter` прямо в DOM, жесты ведёт `useGraphGestures`,
- * собственное вращение — `useGraphSpin`, цикл кадров — `useGraphLoop`, размер
- * сцены — `useGraphViewport`. Здесь остаются ссылки на состояние и разметка.
  */
 export function TechGraph({ selectedId, onSelect, animated, autoSpin, hints }: Props) {
   const gradientId = useId();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [hintsOpen, setHintsOpen] = useState(false);
 
-  // Состояние сцены живёт в ссылках, а не в состоянии React: поворот, жест и
-  // симуляция меняют его десятки раз в секунду, и каждый такой шаг рендером
-  // обошёлся бы в кадр.
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const cameraRef = useRef<Camera>({ ...initialCamera });
@@ -71,7 +64,6 @@ export function TechGraph({ selectedId, onSelect, animated, autoSpin, hints }: P
     simulationRef.current = createSimulation(createGraphModel(techNodes, techEdges));
   }
 
-  // Узлы SVG, в которые отрисовка пишет кадр.
   const nodeLayerRef = useRef<SVGGElement | null>(null);
   const nodeElementsRef = useRef<(SVGGElement | null)[]>([]);
   const edgeLayersRef = useRef({
@@ -101,9 +93,6 @@ export function TechGraph({ selectedId, onSelect, animated, autoSpin, hints }: P
 
   const visibleRef = useRef(true);
 
-  // Наведение на узел перерисовывает компонент, поэтому модель, соседи и
-  // стартовые точки считаются один раз: иначе каждое движение мыши пересобирало
-  // бы граф и пути связей.
   const model = useMemo(() => createGraphModel(techNodes, techEdges), []);
 
   const neighbours = useMemo(() => neighbourMap(techNodes, techEdges), []);

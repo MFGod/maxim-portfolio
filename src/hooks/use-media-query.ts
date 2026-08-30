@@ -7,8 +7,6 @@ import { useCallback, useSyncExternalStore } from 'react';
  * заставка перекрывает единственный кадр коррекции на мобильном.
  */
 export function useMediaQuery(query: string, serverValue = false): boolean {
-  // Подписка обязана быть стабильной: новая функция на каждом рендере заставила
-  // бы React переподписываться на медиазапрос.
   const subscribe = useCallback(
     (onChange: () => void) => {
       const list = window.matchMedia(query);

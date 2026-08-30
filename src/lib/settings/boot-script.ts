@@ -4,12 +4,6 @@ import { SETTINGS_STORAGE_KEY, SETTINGS_VERSION } from './defaults';
 /**
  * Скрипт для `<head>`, выполняется до первой отрисовки: без него страница
  * успевает нарисоваться тёмной у того, кто выбрал светлую тему.
- *
- * Повторяет только правила разрешения темы и уровня движения. Списки значений,
- * имена атрибутов и значения по умолчанию приходят из `ATTRIBUTE_SPEC` сериализацией.
- * Совпадение с `attributesFor` закреплено в `test/settings-boot-script.test.ts`.
- *
- * Последовательность «</» экранируется: внутри `<script>` она закрыла бы тег.
  */
 export function settingsBootScript(): string {
   const spec = JSON.stringify(ATTRIBUTE_SPEC);

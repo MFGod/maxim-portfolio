@@ -107,7 +107,6 @@ export function unprojectDelta(
 
 export function clampCamera(camera: Camera): Camera {
   return {
-    // Ни рыскание, ни наклон не ограничены: шар вертится на все 360°.
     yaw: camera.yaw,
     pitch: camera.pitch,
     zoom: clamp(camera.zoom, ZOOM_RANGE.min, ZOOM_RANGE.max),

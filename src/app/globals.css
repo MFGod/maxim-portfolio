@@ -1,15 +1,8 @@
 @import 'tailwindcss';
 
-/* Подсветка по фокусу — только при навигации с клавиатуры. Варианты повторяют
-   `focus-visible` и `group-focus-visible`, но живут под признаком `data-nav`,
-   который ставит `Tab` и снимает нажатие указателем. Иначе фон и подъём под
-   фокусом появлялись бы после щелчка мышью — браузер считает такой элемент
-   «видимо сфокусированным», как только человек тронет клавиатуру. */
 @custom-variant kbd-focus (&:is(:root[data-nav='keyboard'] *):focus-visible);
 @custom-variant group-kbd-focus (&:is(:root[data-nav='keyboard'] .group:focus-visible *));
 
-/* Оформление разложено по разделам. Порядок важен: токены задают значения,
-   темы и режимы их переопределяют, обои и утилиты читают уже готовые. */
 @import './styles/tokens.css';
 @import './styles/themes.css';
 @import './styles/wallpapers.css';

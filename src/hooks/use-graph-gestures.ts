@@ -120,8 +120,6 @@ export function useGraphGestures({
     [adjustedRef, cameraRef, schedulePaint],
   );
 
-  // Колесо слушается вручную: React вешает пассивный обработчик, а прокрутку
-  // страницы под графом надо отменять.
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
@@ -161,8 +159,6 @@ export function useGraphGestures({
       return;
     }
 
-    // Захват указателя — оптимизация, а не условие жеста: браузер вправе
-    // отказать, и тогда жест продолжается по событиям самого узла.
     try {
       svg.setPointerCapture(event.pointerId);
     } catch {

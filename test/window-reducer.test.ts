@@ -190,7 +190,6 @@ describe('предпочтения открытия', () => {
 
     expect(state.windows['resume']?.status).toBe('maximized');
     expect(state.windows['resume']?.rect).toEqual(workspace);
-    // Свернуть обратно окно должно в запомненные размеры, а не в случайные.
     expect(state.windows['resume']?.restoreRect).toEqual(rect);
   });
 

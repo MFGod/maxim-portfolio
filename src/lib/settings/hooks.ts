@@ -25,8 +25,6 @@ export function useSettings(): Settings {
 export function useSetting<T extends string | number | boolean>(
   select: (settings: Settings) => T,
 ): T {
-  // Мемоизация здесь была бы пустой: селектор приходит новой стрелкой на каждом
-  // рендере, а `useSyncExternalStore` и так зовёт снимок при каждом рендере.
   return useSyncExternalStore(
     settingsStore.subscribe,
     () => select(settingsStore.getSnapshot()),
@@ -34,16 +32,7 @@ export function useSetting<T extends string | number | boolean>(
   );
 }
 
-/**
- * Тема, разрешённая до светлой или тёмной.
- *
- * «Системная» сама по себе ничего не значит для того, кто по ней рисует: свет
- * мира, канвас или холст видят только две. Разрешение живёт здесь, а не у
- * каждого потребителя, — иначе один прочитал бы схему ОС, а другой забыл.
- *
- * На сервере считается светлой: тем же значением по умолчанию, что и у
- * стартового скрипта, иначе первый клиентский рендер разошёлся бы с разметкой.
- */
+/** Тема, разрешённая до светлой или тёмной. */
 export function useResolvedTheme(): ResolvedTheme {
   const preference = useSetting((settings) => settings.appearance.theme);
   const prefersDark = useMediaQuery('(prefers-color-scheme: dark)');

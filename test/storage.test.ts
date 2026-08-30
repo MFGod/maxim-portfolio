@@ -34,7 +34,6 @@ afterEach(() => {
 
 describe('без окружения браузера', () => {
   it('чтение отдаёт null, запись сообщает о неудаче', () => {
-    // На сервере `window` нет вовсе: обращаться не к чему, но и падать нельзя.
     expect(readStorage('portfolio:any')).toBeNull();
     expect(writeStorage('portfolio:any', 'x')).toBe(false);
     expect(removeStorage('portfolio:any')).toBe(false);

@@ -99,8 +99,6 @@ export function columnPanes(
     id: pane.id,
     title: pane.title,
     items: browserItems(pane.id, nodes, excludeShortcut),
-    // Раскрыта та папка, которая стала следующей панелью. У последней панели
-    // следующей нет — раскрывать нечего.
     openedId: chain[index + 1]?.id ?? null,
   }));
 }

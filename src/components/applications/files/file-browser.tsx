@@ -41,10 +41,6 @@ type Props = {
  * Содержимое папки: создание, переименование, удаление, буфер обмена, перенос
  * мышью и четыре режима отображения. Один и тот же вид используют окно папки и
  * «Мой компьютер», поэтому навигация вынесена наружу — её ведёт вызывающий.
- *
- * Раскладку рисуют компоненты из `views/`, панель — `FileBrowserToolbar`, а
- * здесь остаётся всё остальное: выделение, рамка, буфер, меню и клавиатура
- * одинаковы во всех режимах.
  */
 export function FileBrowser({
   parentId,
@@ -72,8 +68,6 @@ export function FileBrowser({
   const flat = browserItems(parentId, nodes, excludeShortcut);
   const isEmpty = flat.length === 0;
 
-  // Группировка меняет порядок чтения, а значит и диапазон по Shift. В колонках
-  // и галерее групп нет: там объекты и так разложены по панелям и по ленте.
   const groups = groupsOf(
     flat,
     mode === 'icons' || mode === 'list' ? grouping : 'none',
@@ -83,7 +77,6 @@ export function FileBrowser({
   const order = items.map((item) => item.key);
   const cutIds = clipboard?.mode === 'cut' ? clipboard.ids : [];
 
-  // Папка исчезла — например, её удалили из другого окна: возвращаемся на стол.
   useEffect(() => {
     if (parentId && !nodes[parentId]) onNavigate(null);
   }, [nodes, onNavigate, parentId]);
@@ -122,10 +115,6 @@ export function FileBrowser({
     onMarqueeStart: prepareMarquee,
   });
 
-  // Переход в другую папку начинается с чистого листа: выделение осталось бы
-  // висеть на объектах, которых в этой папке нет. Правка состояния прямо в
-  // рендере — тот случай, ради которого React её и допускает: эффект показал
-  // бы кадр с чужим выделением.
   const [selectionParent, setSelectionParent] = useState(parentId);
   if (selectionParent !== parentId) {
     setSelectionParent(parentId);
@@ -158,7 +147,6 @@ export function FileBrowser({
     dropTargetId,
     renamingId,
     dragIdsFor: (key) => (selected.has(key) ? selectedFiles : [key]),
-    // Результат выделения нужен только рабочему столу — там им начинают жест.
     onSelect: (key, modifiers) => void selectForPointer(key, modifiers),
     onSelectOnly: selectOnly,
     onOpen: openItem,
@@ -237,12 +225,9 @@ export function FileBrowser({
         ref={contentRef}
         className={cn(
           'relative min-h-0 flex-1 scrollbar-thin',
-          // Колонки прокручиваются каждая своя и занимают всю высоту; остальные
-          // режимы — общая вертикальная прокрутка с полями.
           mode === 'columns' ? 'overflow-hidden' : 'overflow-y-auto p-3',
         )}
         onPointerDown={(event) => {
-          // Нажатие на объекте — его дело: выделение или перетаскивание.
           if (
             event.target instanceof Element &&
             event.target.closest(`[${SELECT_KEY_ATTRIBUTE}]`)
@@ -282,8 +267,6 @@ export function FileBrowser({
             mode={mode}
             view={view}
             nodes={nodes}
-            // Цепочка панелей нужна только колонкам: в остальных режимах её
-            // расчёт обошёл бы всех предков папки впустую.
             panes={mode === 'columns' ? columnPanes(nodes, path, excludeShortcut) : []}
             focused={items.find((item) => item.key === [...selected][0]) ?? null}
             onNavigate={onNavigate}

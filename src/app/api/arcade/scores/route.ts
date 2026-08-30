@@ -53,7 +53,6 @@ export async function POST(request: Request) {
       return reject('rate-limit', 429);
     }
 
-    // Токен одноразовый: один запуск — один результат в таблице.
     if (!(await arcadeStore.claimNonce(session.nonce))) {
       return reject('already-submitted', 403);
     }

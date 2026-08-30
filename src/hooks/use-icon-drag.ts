@@ -78,7 +78,6 @@ export function useIconDrag({
       x: next.x + metrics.width / 2,
       y: next.y + metrics.height / 2,
     };
-    // Папка, которую тянут вместе с группой, приёмником быть не может.
     const targets = folderKeys.filter((key) => !(key in groupRef.current));
     return findIconAt(positions, targets, center, metrics);
   };
@@ -128,8 +127,6 @@ export function useIconDrag({
       dropTargetRef.current = null;
     }
 
-    // Группу отпустили над папкой — это перенос, а не новые позиции на столе.
-    // Ярлыки программ и файлы, которые переехать не смогли, встают на место.
     const folderId = target ? fileIdOf(target) : null;
     if (folderId) {
       const movedIds = fileStore.moveMany(fileIdsOf(Object.keys(next)), folderId);

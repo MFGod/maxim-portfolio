@@ -84,7 +84,7 @@ export function ContactApp() {
       </a>
 
       <p className="border-line-subtle text-ink-faint mt-6 border-t pt-4 text-xs">
-        {profile.name} · {profile.role} · {profile.location}
+        {profile.name}, {profile.role}, {profile.location}
       </p>
     </AppBody>
   );

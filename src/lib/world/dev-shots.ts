@@ -1,20 +1,4 @@
-/**
- * Снимки камеры — инструмент подбора ракурсов.
- *
- * Точка входа, планы глав и облёт задаются шестью числами: где камера и куда
- * смотрит. Подбираются они вживую, а живут потом в `src/data/world-shots.ts`,
- * поэтому между подбором и данными нужен мост: сохранить текущий вид под
- * именем, вернуться к нему, а в конце выгрузить всё готовым куском кода.
- *
- * Снимки лежат в `localStorage`: перезагрузка страницы при подборе неизбежна,
- * а терять час работы из-за неё нельзя. Хранилище чужое и ненадёжное — его
- * может не быть вовсе (приватный режим), в нём может лежать мусор от прошлых
- * версий, запись может упереться в квоту. Поэтому читаем с проверкой каждой
- * записи, а пишем так, чтобы отказ хранилища не ронял обработчик клика.
- *
- * Включается флагом `SHOT_TOOLS` из `dev-tools.ts`; сам модуль работает всегда
- * и проверяется тестами, чтобы не сгнить к моменту, когда снова понадобится.
- */
+/** Снимки камеры — инструмент подбора ракурсов. */
 
 import * as THREE from 'three';
 
@@ -51,13 +35,7 @@ function isPoint(value: unknown): value is [number, number, number] {
   );
 }
 
-/**
- * Годится ли запись из хранилища.
- *
- * Проверяется каждая: в `localStorage` мог остаться снимок от прежней версии
- * формата, и одна порченая запись иначе роняет весь подбор при первом же
- * обращении к её координатам.
- */
+/** Годится ли запись из хранилища. */
 function isShot(value: unknown): value is CameraShot {
   if (typeof value !== 'object' || value === null) return false;
   const shot = value as Partial<CameraShot>;
@@ -73,17 +51,13 @@ function read(): CameraShot[] {
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.filter(isShot) : [];
   } catch {
-    // Испорченный ключ не должен ронять подбор: начинаем с пустого списка.
     return [];
   }
 }
 
 /**
  * Пишет список снимков.
- *
  * @returns удалось ли сохранить. Отказ хранилища — не повод падать посреди
- *   обработчика клика: снимок всё равно вернётся вызвавшему, просто не
- *   переживёт перезагрузку.
  */
 function write(shots: CameraShot[]): boolean {
   if (typeof localStorage === 'undefined') return false;
@@ -105,8 +79,6 @@ function nextAutoNumber(shots: CameraShot[]): number {
     .map(Number)
     .filter(Number.isFinite);
 
-  // Номер по длине списка переиспользовался после удалений и молча затирал
-  // прежний снимок. Считаем от наибольшего занятого.
   return (used.length ? Math.max(...used) : 0) + 1;
 }
 
@@ -118,8 +90,6 @@ export function saveShot(
 ): CameraShot {
   const shots = read();
 
-  // Направление берём у самой камеры, а не из разницы с целью: оно верно в
-  // любом режиме и не зависит от того, где OrbitControls держит точку взгляда.
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
   const distance = Math.max(camera.position.distanceTo(target), MIN_LOOK_DISTANCE);
   const look = camera.position.clone().addScaledVector(forward, distance);
@@ -130,7 +100,6 @@ export function saveShot(
     look: [round(look.x), round(look.y), round(look.z)],
   };
 
-  // Снимок с тем же именем заменяется: подбор — это уточнение одного ракурса.
   write([...shots.filter((item) => item.name !== shot.name), shot]);
 
   return shot;
@@ -169,12 +138,7 @@ export function clearShots(): void {
   write([]);
 }
 
-/**
- * Карманы оболочки из ещё не утверждённых снимков.
- *
- * Правило и размеры те же, что у мировых ракурсов (`shots.ts`) — иначе кадр,
- * подобранный на стенде, поехал бы после переноса в данные.
- */
+/** Карманы оболочки из ещё не утверждённых снимков. */
 export function pocketsFromShots(shots: CameraShot[] = read()): ShellPocket[] {
   return shots.map((shot) => pocketOf({ id: shot.name, at: shot.at, look: shot.look }));
 }
@@ -183,7 +147,6 @@ export function pocketsFromShots(shots: CameraShot[] = read()): ShellPocket[] {
 export function exportShots(): string {
   return read()
     .map((shot) => {
-      // Имя задаёт человек, и апостроф в нём порвал бы строковый литерал.
       const id = shot.name.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
       return `  { id: '${id}', at: [${shot.at.join(', ')}], look: [${shot.look.join(', ')}] },`;
     })

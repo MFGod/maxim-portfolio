@@ -93,7 +93,6 @@ export function place(previous: Block, moving: Block): Placement {
 
   const offset = moving.x - previous.x;
 
-  // Точное попадание не срезает ничего: иначе башня таяла бы от округлений.
   if (Math.abs(offset) <= PERFECT_TOLERANCE) {
     return {
       status: 'placed',

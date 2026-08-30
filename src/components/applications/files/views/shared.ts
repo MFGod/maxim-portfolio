@@ -10,8 +10,6 @@ import { fileStore } from '@/lib/files/store';
 /** Формат MIME для переноса внутри окна. Своё имя — чтобы не ловить чужие данные. */
 export const DRAG_TYPE = 'application/x-desktop-file';
 
-// Состав списка и его группировка считаются вне React — там же живут и типы.
-// Режимы отображения берут их отсюда: для них это часть одного контракта.
 export type { BrowserItem, ItemGroup, Modifiers };
 
 /**
@@ -73,7 +71,6 @@ export function dragProps(item: BrowserItem, view: ItemView) {
   return {
     draggable: item.kind === 'file',
     onDragStart: (event: React.DragEvent) => {
-      // Перетаскивание не даёт клика: выделить объект нужно здесь.
       if (!view.selected.has(item.key)) view.onSelectOnly(item.key);
       event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(view.dragIdsFor(item.key)));
       event.dataTransfer.effectAllowed = 'move';
@@ -100,8 +97,6 @@ export function dragProps(item: BrowserItem, view: ItemView) {
 /** Состояния оформления, общие для плитки и строки. */
 export function stateClasses(item: BrowserItem, view: ItemView) {
   const selected = view.selected.has(item.key);
-  // Приёмник — только папка: у файла и ярлыка `folderIdOf` даёт `null`, и без
-  // явной проверки они совпали бы с пустым `dropTargetId`.
   const folderId = folderIdOf(item);
   const dropTarget = folderId !== null && folderId === view.dropTargetId;
   const cut = item.kind === 'file' && view.cutIds.includes(item.node.id);

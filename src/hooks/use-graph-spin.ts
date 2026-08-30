@@ -56,7 +56,6 @@ export function useGraphSpin({
       const target = targetRef.current;
       const settle = Math.min(1, SPIN_SETTLE * seconds);
 
-      // Наведение на узел останавливает шар: подпись под курсором не должна уезжать.
       const paused = highlightRef.current.activeId !== null;
       const sign = target.yaw < 0 ? -1 : 1;
       target.yaw += (IDLE_SPIN * sign - target.yaw) * settle;

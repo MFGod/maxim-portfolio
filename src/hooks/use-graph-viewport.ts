@@ -38,7 +38,6 @@ export function useGraphViewport({
   reheat,
   startLoop,
 }: Options) {
-  // Обработчики читаются из ссылки: наблюдатели переживают их пересоздание.
   const handlersRef = useRef({ schedulePaint, fitToViewport, reheat, startLoop });
   useEffect(() => {
     handlersRef.current = { schedulePaint, fitToViewport, reheat, startLoop };
@@ -83,7 +82,6 @@ export function useGraphViewport({
     });
     observer.observe(container);
 
-    // Вне экрана шар не крутится: незачем греть кадры ради того, чего не видно.
     const visibility = new IntersectionObserver(([entry]) => {
       visibleRef.current = entry?.isIntersecting ?? true;
       if (visibleRef.current) handlersRef.current.startLoop();
