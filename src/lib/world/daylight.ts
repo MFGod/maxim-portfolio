@@ -2,6 +2,14 @@
 
 import type { ResolvedTheme } from '@/lib/settings/types';
 
+import { worldFog } from './horizon';
+
+/** Туман по кругу облаков. Он один на оба набора: сумерки только сгущают его. */
+const FOG = worldFog();
+
+/** Во сколько раз сумеречный туман берётся ближе и кончается раньше дневного. */
+const DUSK_FOG = { near: 0.6, far: 0.87 };
+
 /** Полный набор освещения одного времени суток. */
 export type Daylight = {
   /** Небо и дальний план тумана — один цвет: иначе на горизонте видна граница. */
@@ -27,7 +35,7 @@ export type Daylight = {
 /** День: значения, подобранные вживую. */
 export const DAY: Daylight = {
   sky: 0x50638e,
-  fog: { near: 70, far: 170 },
+  fog: { ...FOG },
   ambient: { color: 0xffffff, intensity: 0.26 },
   hemisphere: { sky: 0x7c7a90, ground: 0x5f5b4f, intensity: 1.2 },
   moon: { disc: 0xc9d2e4, color: 0xdfe9ff, intensity: 2.8 },
@@ -38,7 +46,7 @@ export const DAY: Daylight = {
 /** Сумерки: то же место на исходе дня, а не ночь. */
 export const DUSK: Daylight = {
   sky: 0x1b2340,
-  fog: { near: 42, far: 148 },
+  fog: { near: FOG.near * DUSK_FOG.near, far: FOG.far * DUSK_FOG.far },
   ambient: { color: 0x9fb0d8, intensity: 0.14 },
   hemisphere: { sky: 0x2b3358, ground: 0x191b24, intensity: 0.6 },
   moon: { disc: 0xdfe7ff, color: 0xc7d8ff, intensity: 2.2 },

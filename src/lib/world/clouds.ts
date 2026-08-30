@@ -1,4 +1,4 @@
-/** Гряда облаков по кромке воды. */
+/** Кольцо облаков — граница мира. Круг вписывает в себя всю карту. */
 
 import * as THREE from 'three';
 
@@ -10,7 +10,7 @@ export type CloudModel = {
   /** Длина комка вдоль его X. Ею меряется перекрытие соседей. */
   width: number;
   height: number;
-  /** Толщина поперёк кромки. Ею меряется заход внутрь карты. */
+  /** Толщина поперёк окружности. Ею меряется заход внутрь круга. */
   depth: number;
   bottom: number;
 };
@@ -23,7 +23,7 @@ export const CLOUD_MODELS: readonly CloudModel[] = [
 ];
 
 /**
- * Наибольший шаг по обходу, при котором соседи ещё перекрываются.
+ * Наибольший шаг по окружности, при котором соседи ещё перекрываются.
  * @param zoom общий множитель размера кольца — у гряды 1, у дальних колец больше
  */
 export function overlapStep(zoom = 1): number {
@@ -37,19 +37,19 @@ export function overlapStep(zoom = 1): number {
 export const CLOUD_SCALE_MIN = 1.6;
 export const CLOUD_SCALE_MAX = 2.4;
 
-/** Сдвиг середины комка поперёк кромки, юнитов. Наружу — плюс. */
+/** Сдвиг середины комка поперёк окружности, юнитов. Наружу — плюс. */
 export const CLOUD_OUT = 0;
 
-/** Разброс сдвига поперёк кромки. Ряд без него читается забором. */
+/** Разброс сдвига поперёк окружности. Ряд без него читается забором. */
 export const CLOUD_SWAY = 1.1;
 
 /** Рядов в гряде. */
 export const CLOUD_ROWS = 2;
 
-/** Отступ каждого следующего ряда внутрь карты, юнитов. */
+/** Отступ каждого следующего ряда внутрь круга, юнитов. */
 export const CLOUD_ROW_INSET = 3;
 
-/** Разброс сдвига вдоль кромки, долей шага. */
+/** Разброс сдвига вдоль окружности, долей шага. */
 export const CLOUD_SLIDE = 0.35;
 
 /** Насколько низ комка уходит под уровень моря — долей его собственной высоты. */
@@ -58,11 +58,24 @@ export const CLOUD_SINK = 0.6;
 /** Доворот комка вокруг вертикали, радиан. Ряд одинаково развёрнутых — гребёнка. */
 export const CLOUD_YAW = 0.3;
 
-/** Шаг гряды по кромке. */
+/** Шаг гряды по окружности. */
 export const CLOUD_STEP = overlapStep();
 
 /** Сила собственного свечения комьев. */
 export const CLOUD_GLOW = 0.4;
+
+/**
+ * Зазор между углом карты и кольцом, юнитов. Круг описан вокруг прямоугольника
+ * границ и касался бы углов: зазор уводит от них и сами комья, и их толщину.
+ */
+export const HORIZON_MARGIN = 8;
+
+/** Окружность границы мира: середина карты и радиус кольца. */
+export type WorldCircle = {
+  x: number;
+  z: number;
+  radius: number;
+};
 
 /**
  * Место одного комка. Матрица собирается уже в `attachClouds`: в раскладке
@@ -75,7 +88,7 @@ export type CloudPlacement = {
   /** Середина комка по высоте: низ утоплен под `SEA_LEVEL` на долю высоты. */
   y: number;
   z: number;
-  /** Поворот вокруг вертикали. Длинная ось комка идёт вдоль кромки. */
+  /** Поворот вокруг вертикали. Длинная ось комка идёт по касательной. */
   yaw: number;
   scale: number;
 };
@@ -91,58 +104,68 @@ function hash(value: number): number {
   return noise - Math.floor(noise);
 }
 
-/** Ширина и глубина прямоугольника границ. */
-function sizeOf(bounds: WorldBounds) {
-  return { width: bounds.maxX - bounds.minX, depth: bounds.maxZ - bounds.minZ };
-}
-
-/** Точка на обходе прямоугольника и внешняя нормаль в ней. */
-function walk(bounds: WorldBounds, distance: number) {
-  const { width, depth } = sizeOf(bounds);
-  const perimeter = 2 * (width + depth);
-  let step = ((distance % perimeter) + perimeter) % perimeter;
-
-  if (step < width) {
-    return { x: bounds.minX + step, z: bounds.minZ, nx: 0, nz: -1, yaw: 0 };
-  }
-  step -= width;
-
-  if (step < depth) {
-    return {
-      x: bounds.maxX,
-      z: bounds.minZ + step,
-      nx: 1,
-      nz: 0,
-      yaw: Math.PI / 2,
-    };
-  }
-  step -= depth;
-
-  if (step < width) {
-    return { x: bounds.maxX - step, z: bounds.maxZ, nx: 0, nz: 1, yaw: 0 };
-  }
-  step -= width;
-
+/** Середина прямоугольника границ. */
+export function boundsCenter(bounds: WorldBounds = MAP_BOUNDS) {
   return {
-    x: bounds.minX,
-    z: bounds.maxZ - step,
-    nx: -1,
-    nz: 0,
-    yaw: Math.PI / 2,
+    x: (bounds.minX + bounds.maxX) / 2,
+    z: (bounds.minZ + bounds.maxZ) / 2,
   };
 }
 
-/** Гряда по границе: где стоит каждый комок. */
+/**
+ * The radius of the cloud ring that wraps the 3d model of the world with water plain.
+ */
+export const CLOUD_BOUNDARY_RADIUS = 50
+
+/**
+ * Круг границы мира. Он не обрамляет карту по кромке, а вписывает её в себя
+ * целиком: до кольца от берега везде остаётся открытая вода.
+ */
+export function cloudCircle(bounds: WorldBounds = MAP_BOUNDS): WorldCircle {
+  return {
+    ...boundsCenter(bounds),
+    radius: CLOUD_BOUNDARY_RADIUS + HORIZON_MARGIN,
+  };
+}
+
+/** Половина толщины самого крупного комка кольца. */
+function bodyReach(zoom: number): number {
+  const thickest = Math.max(...CLOUD_MODELS.map((model) => model.depth));
+
+  return (thickest * zoom * CLOUD_SCALE_MAX) / 2;
+}
+
+/** Точка на окружности и внешняя нормаль в ней. */
+function walk(circle: WorldCircle, distance: number) {
+  const angle = distance / circle.radius;
+  const nx = Math.cos(angle);
+  const nz = Math.sin(angle);
+
+  return {
+    x: circle.x + nx * circle.radius,
+    z: circle.z + nz * circle.radius,
+    nx,
+    nz,
+    /** Касательная: длинная ось комка идёт вдоль края, а не поперёк. */
+    yaw: Math.PI / 2 - angle,
+  };
+}
+
+/** Гряда по кругу: где стоит каждый комок. */
 export function cloudRing(bounds: WorldBounds = MAP_BOUNDS): CloudPlacement[] {
-  const { width, depth } = sizeOf(bounds);
-  const perimeter = 2 * (width + depth);
-  const count = Math.round(perimeter / CLOUD_STEP);
-  const step = perimeter / count;
+  const circle = cloudCircle(bounds);
+  const count = Math.round((2 * Math.PI * circle.radius) / CLOUD_STEP);
 
   const ring: CloudPlacement[] = [];
 
   for (let row = 0; row < CLOUD_ROWS; row++) {
     const seed = row * 1531;
+    /** Внутренний ряд идёт по своему кругу, но тем же числом комьев. */
+    const lane: WorldCircle = {
+      ...circle,
+      radius: circle.radius - row * CLOUD_ROW_INSET,
+    };
+    const step = (2 * Math.PI * lane.radius) / count;
     const phase = row * step * 0.5;
 
     for (let index = 0; index < count; index++) {
@@ -153,11 +176,9 @@ export function cloudRing(bounds: WorldBounds = MAP_BOUNDS): CloudPlacement[] {
         hash(index + seed + 101) * (CLOUD_SCALE_MAX - CLOUD_SCALE_MIN);
 
       const slide = (hash(index + seed + 211) - 0.5) * step * CLOUD_SLIDE;
-      const point = walk(bounds, index * step + phase + slide);
+      const point = walk(lane, index * step + phase + slide);
 
-      const inset = row * CLOUD_ROW_INSET;
-      const sway =
-        CLOUD_OUT - inset + (hash(index + seed + 307) - 0.5) * 2 * CLOUD_SWAY;
+      const sway = CLOUD_OUT + (hash(index + seed + 307) - 0.5) * 2 * CLOUD_SWAY;
       const shape = CLOUD_MODELS[model]!;
       const bottom = shape.bottom * scale;
       const sink = shape.height * scale * CLOUD_SINK;
@@ -176,7 +197,7 @@ export function cloudRing(bounds: WorldBounds = MAP_BOUNDS): CloudPlacement[] {
   return ring;
 }
 
-/** Поле облаков за границей мира. */
+/** Поле облаков за кольцом: насколько кольцо отодвинуто наружу и во сколько раз крупнее. */
 export const CLOUD_FIELD: readonly { out: number; scale: number }[] = [
   { out: 4, scale: 2.2 },
   { out: 13, scale: 2.9 },
@@ -199,7 +220,7 @@ export function fieldSway(order: number): number {
   return Math.max(outward, inward) * FIELD_SPREAD;
 }
 
-/** Все комья границы: гряда по кромке и, если позволено, поле за ней. */
+/** Все комья границы: гряда по кругу и, если позволено, поле за ней. */
 export function cloudPlaces(
   bounds: WorldBounds = MAP_BOUNDS,
   field = true,
@@ -208,20 +229,14 @@ export function cloudPlaces(
 }
 
 export function cloudField(bounds: WorldBounds = MAP_BOUNDS): CloudPlacement[] {
+  const circle = cloudCircle(bounds);
   const field: CloudPlacement[] = [];
 
   CLOUD_FIELD.forEach((ring, order) => {
-    const outer: WorldBounds = {
-      minX: bounds.minX - ring.out,
-      maxX: bounds.maxX + ring.out,
-      minZ: bounds.minZ - ring.out,
-      maxZ: bounds.maxZ + ring.out,
-    };
+    const outer: WorldCircle = { ...circle, radius: circle.radius + ring.out };
 
-    const { width, depth } = sizeOf(outer);
-    const perimeter = 2 * (width + depth);
-    const count = Math.round(perimeter / overlapStep(ring.scale));
-    const step = perimeter / count;
+    const count = Math.round((2 * Math.PI * outer.radius) / overlapStep(ring.scale));
+    const step = (2 * Math.PI * outer.radius) / count;
     const spread = fieldSway(order);
     const seed = 7717 + order * 2311;
 
@@ -254,6 +269,16 @@ export function cloudField(bounds: WorldBounds = MAP_BOUNDS): CloudPlacement[] {
   return field;
 }
 
+/** Докуда достаёт самый дальний комок поля: радиус от середины карты. */
+export function cloudReach(bounds: WorldBounds = MAP_BOUNDS): number {
+  const last = CLOUD_FIELD.length - 1;
+  const ring = CLOUD_FIELD[last]!;
+
+  return (
+    cloudCircle(bounds).radius + ring.out + fieldSway(last) + bodyReach(ring.scale)
+  );
+}
+
 /** Цвет воды, к которому уводится внутренний край подложки. */
 const WATER_TINT = 0x46d3dd;
 
@@ -269,52 +294,84 @@ const FLOOR_BITE = 0.5;
 /** Насколько подложка ниже уровня моря. Только чтобы не спорить с водой за глубину. */
 const FLOOR_DROP = 0.01;
 
-/** Насколько далеко за границу мира уходит подложка. */
-export function floorReach(): number {
-  const last = CLOUD_FIELD.length - 1;
-  const thickest = Math.max(...CLOUD_MODELS.map((model) => model.depth));
-  const body = (thickest * CLOUD_FIELD[last]!.scale * CLOUD_SCALE_MAX) / 2;
+/** Долей окружности на одну грань внешнего края подложки. */
+const FLOOR_SEGMENTS = 96;
 
-  return CLOUD_FIELD[last]!.out + fieldSway(last) + body + FLOOR_MARGIN;
+/** Радиус подложки от середины карты: она кончается дальше самого дальнего комка. */
+export function floorRadius(bounds: WorldBounds = MAP_BOUNDS): number {
+  return cloudReach(bounds) + FLOOR_MARGIN;
 }
 
-/** Подложка под полем облаков. */
-function cloudFloor(bounds: WorldBounds, reach: number): THREE.Mesh {
-  const inner = {
+/**
+ * Углы, по которым нарезается подложка: равномерный обход плюс углы карты.
+ * Без них грань перекрыла бы угол хордой и подложка залезла бы на сушу.
+ */
+function floorAngles(inner: WorldBounds, center: { x: number; z: number }): number[] {
+  const turn = Math.PI * 2;
+  const angles: number[] = [];
+
+  for (let index = 0; index < FLOOR_SEGMENTS; index++) {
+    angles.push((index / FLOOR_SEGMENTS) * turn);
+  }
+
+  for (const x of [inner.minX, inner.maxX]) {
+    for (const z of [inner.minZ, inner.maxZ]) {
+      angles.push((Math.atan2(z - center.z, x - center.x) + turn) % turn);
+    }
+  }
+
+  return angles.sort((a, b) => a - b);
+}
+
+/** Где луч из середины карты под этим углом протыкает прямоугольник. */
+function rayToBounds(
+  inner: WorldBounds,
+  center: { x: number; z: number },
+  angle: number,
+): [number, number] {
+  const nx = Math.cos(angle);
+  const nz = Math.sin(angle);
+
+  const reach = Math.min(
+    Math.abs(nx) < 1e-9 ? Infinity : (inner.maxX - inner.minX) / 2 / Math.abs(nx),
+    Math.abs(nz) < 1e-9 ? Infinity : (inner.maxZ - inner.minZ) / 2 / Math.abs(nz),
+  );
+
+  return [center.x + nx * reach, center.z + nz * reach];
+}
+
+/**
+ * Подложка под полем облаков: кольцо от кромки карты до края круга. Она даёт
+ * морю продолжение там, где тайлы уже кончились, и уводит его в цвет неба.
+ */
+function cloudFloor(bounds: WorldBounds, radius: number): THREE.Mesh {
+  const inner: WorldBounds = {
     minX: bounds.minX + FLOOR_BITE,
     maxX: bounds.maxX - FLOOR_BITE,
     minZ: bounds.minZ + FLOOR_BITE,
     maxZ: bounds.maxZ - FLOOR_BITE,
   };
 
-  const corners = (box: WorldBounds) =>
-    [
-      [box.minX, box.minZ],
-      [box.maxX, box.minZ],
-      [box.maxX, box.maxZ],
-      [box.minX, box.maxZ],
-    ] as const;
-
-  const insides = corners(inner);
-  const outsides = corners({
-    minX: bounds.minX - reach,
-    maxX: bounds.maxX + reach,
-    minZ: bounds.minZ - reach,
-    maxZ: bounds.maxZ + reach,
-  });
+  const center = boundsCenter(bounds);
+  const angles = floorAngles(inner, center);
 
   const y = SEA_LEVEL - FLOOR_DROP;
   const positions: number[] = [];
   const indices: number[] = [];
 
-  for (let corner = 0; corner < 4; corner++) {
-    positions.push(insides[corner]![0], y, insides[corner]![1]);
-    positions.push(outsides[corner]![0], y, outsides[corner]![1]);
+  for (const angle of angles) {
+    const [x, z] = rayToBounds(inner, center, angle);
+    positions.push(x, y, z);
+    positions.push(
+      center.x + Math.cos(angle) * radius,
+      y,
+      center.z + Math.sin(angle) * radius,
+    );
   }
 
-  for (let corner = 0; corner < 4; corner++) {
-    const here = corner * 2;
-    const next = ((corner + 1) % 4) * 2;
+  for (let edge = 0; edge < angles.length; edge++) {
+    const here = edge * 2;
+    const next = ((edge + 1) % angles.length) * 2;
     indices.push(here, here + 1, next + 1, here, next + 1, next);
   }
 
@@ -322,7 +379,7 @@ function cloudFloor(bounds: WorldBounds, reach: number): THREE.Mesh {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute(
     'color',
-    new THREE.Float32BufferAttribute(new Array(24).fill(1), 3),
+    new THREE.Float32BufferAttribute(new Array(positions.length).fill(1), 3),
   );
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
@@ -331,7 +388,6 @@ function cloudFloor(bounds: WorldBounds, reach: number): THREE.Mesh {
     geometry,
     new THREE.MeshBasicMaterial({
       vertexColors: true,
-      fog: false,
       side: THREE.DoubleSide,
     }),
   );
@@ -365,7 +421,7 @@ function bakedGeometry(gltf: { scene: THREE.Object3D }): THREE.BufferGeometry {
 }
 
 /**
- * Ставит гряду в сцену.
+ * Ставит кольцо в сцену.
  * @param models загруженные `cloud_1..5.glb` — в порядке `CLOUD_MODELS`
  */
 export function attachClouds(
@@ -383,16 +439,19 @@ export function attachClouds(
   const group = new THREE.Group();
   group.name = 'Clouds';
 
-  const floor = cloudFloor(bounds, floorReach());
+  const floor = cloudFloor(bounds, floorRadius(bounds));
   group.add(floor);
 
   const geometries = models.map((model) => bakedGeometry(model));
 
+  /**
+   * Комья в тумане наравне с миром: без этого кольцо стояло бы чёткой стеной
+   * там, где всё остальное уже ушло в небо.
+   */
   const material = new THREE.MeshStandardMaterial({
     color: 0xdfe6f0,
     roughness: 0.95,
     metalness: 0,
-    fog: false,
     emissiveIntensity: CLOUD_GLOW,
   });
 
@@ -454,9 +513,9 @@ export function attachClouds(
       const near = far.clone().lerp(new THREE.Color(WATER_TINT), FLOOR_SEA);
 
       const colors = floor.geometry.getAttribute('color') as THREE.BufferAttribute;
-      for (let corner = 0; corner < 4; corner++) {
-        colors.setXYZ(corner * 2, near.r, near.g, near.b);
-        colors.setXYZ(corner * 2 + 1, far.r, far.g, far.b);
+      for (let edge = 0; edge < colors.count / 2; edge++) {
+        colors.setXYZ(edge * 2, near.r, near.g, near.b);
+        colors.setXYZ(edge * 2 + 1, far.r, far.g, far.b);
       }
       colors.needsUpdate = true;
     },

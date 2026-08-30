@@ -25,6 +25,7 @@ import type { WorldQuality } from './capability';
 import { createCameraRig, type CameraRig, type ControlMode } from './camera-rig';
 import { clipToBounds } from './clip-map';
 import { attachClouds, CLOUD_MODELS, type Clouds } from './clouds';
+import { DRAW_DISTANCE } from './horizon';
 import type { WorldDevDrafts, WorldDevTools } from './dev-console';
 import { createFigures, type Figures } from './figures';
 import { DAY, daylightFor, mixDaylight, type Daylight } from './daylight';
@@ -240,7 +241,7 @@ export function createWorld(
     65,
     size().width / size().height,
     0.1,
-    250,
+    DRAW_DISTANCE,
   );
   camera.position.set(5, 22, 22);
 
