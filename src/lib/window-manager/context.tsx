@@ -12,7 +12,9 @@ import {
   type ReactNode,
 } from 'react';
 
-import type { AppId } from '@/data/applications';
+import { useRouter } from 'next/navigation';
+
+import { applications, type AppId } from '@/data/applications';
 import { useIsomorphicLayoutEffect } from '@/hooks/use-isomorphic-layout-effect';
 import {
   DOCK_RESERVE,
@@ -20,6 +22,7 @@ import {
   SSR_VIEWPORT,
   WORKSPACE_INSET,
 } from '@/lib/layout';
+import { DESKTOP_ROUTE } from '@/lib/routes';
 import { useSetting } from '@/lib/settings/hooks';
 import { settingsStore } from '@/lib/settings/store';
 
@@ -114,6 +117,8 @@ export function WindowManagerProvider({
   const [workspace, setWorkspace] = useState<Workspace>(ssrWorkspace);
   const [pendingCloseId, setPendingCloseId] = useState<string | null>(null);
 
+  const router = useRouter();
+
   const workspaceRef = useRef(ssrWorkspace);
   const storedRef = useRef<StoredWindows>(emptyStored);
   const restoredRef = useRef(false);
@@ -143,8 +148,15 @@ export function WindowManagerProvider({
     [],
   );
 
+  /** Запуск программы. */
   const open = useCallback(
     (app: AppId, payload?: WindowPayload) => {
+      const meta = applications[app];
+      if (meta.opensAs === 'page') {
+        router.push(meta.route);
+        return;
+      }
+
       const settings = settingsStore.getSnapshot();
       const id = windowIdOf(app, payload);
       openWith(app, payload, {
@@ -155,7 +167,7 @@ export function WindowManagerProvider({
         centered: settings.windows.openCentered,
       });
     },
-    [openWith],
+    [openWith, router],
   );
 
   useEffect(() => {
@@ -190,7 +202,7 @@ export function WindowManagerProvider({
     settingsStore.hydrate();
     storedRef.current = readStoredWindows();
 
-    if (initialApp || window.location.pathname !== '/') return;
+    if (initialApp || window.location.pathname !== DESKTOP_ROUTE) return;
 
     const { behavior, windows } = settingsStore.getSnapshot();
     if (behavior.startup === 'none') return;
@@ -262,8 +274,6 @@ export function WindowManagerProvider({
 
   const cancelClose = useCallback(() => setPendingCloseId(null), []);
 
-  // Значение контекста собирается мемоизированным, а действия — стабильными:
-  // без этого любой рендер провайдера перерисовывал бы все открытые окна.
   const value = useMemo<WindowManagerContextValue>(
     () => ({
       state,

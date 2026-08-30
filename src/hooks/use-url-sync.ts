@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 
 import { labelOf } from '@/components/applications/app-registry';
-import { pathnameFromWindow, targetFromPathname } from '@/lib/routes';
+import { DESKTOP_ROUTE, pathnameFromWindow, targetFromPathname } from '@/lib/routes';
 import { useSetting } from '@/lib/settings';
 import { settingsSectionStore } from '@/lib/settings/section-store';
 import { useWindowManager } from '@/lib/window-manager';
@@ -21,7 +21,7 @@ export function useUrlSync() {
 
   useEffect(() => {
     const focused = focusedId ? state.windows[focusedId] : null;
-    const nextPath = focused ? pathnameFromWindow(focused) : '/';
+    const nextPath = focused ? pathnameFromWindow(focused) : DESKTOP_ROUTE;
 
     if (window.location.pathname !== nextPath) {
       window.history.replaceState(null, '', nextPath);

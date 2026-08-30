@@ -29,9 +29,6 @@ import { TerminalApp } from './terminal/terminal-app';
  * Контент приложений подключён статически, а не через `next/dynamic`: весь
  * текст сайта — одно резюме, и он весит меньше рантайма ленивой загрузки.
  * Заодно всё содержимое попадает в серверный HTML.
- *
- * Ветка `default` проверяет полноту: приложение из `APP_IDS` без своего `case`
- * становится ошибкой компиляции, а не пустым окном из дока.
  */
 export function AppContent({ instance }: { instance: WindowInstance }) {
   switch (instance.app) {
@@ -53,6 +50,8 @@ export function AppContent({ instance }: { instance: WindowInstance }) {
       return <ContactApp />;
     case 'arcade':
       return <ArcadeApp />;
+    case 'world':
+      return null;
     case 'terminal':
       return <TerminalApp />;
     case 'source':

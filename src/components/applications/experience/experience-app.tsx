@@ -22,16 +22,13 @@ export function ExperienceApp() {
             Сверху — текущее место. Полное резюме — в приложении «Резюме».
           </p>
         </div>
-        {/*
-          Карта живёт отдельной страницей, а не видом внутри окна: в 654×480 она
-          читалась виджетом, а это место, по которому ходят.
-        */}
-        <a
-          href="/world"
+        <button
+          type="button"
+          onClick={() => open('world')}
           className="border-accent-dim/50 bg-accent-wash text-accent hover:border-accent shrink-0 rounded-sm border px-3 py-1.5 text-xs transition-colors duration-(--duration-fast)"
         >
           {t('experience.openMap')}
-        </a>
+        </button>
       </div>
 
       {
@@ -51,10 +48,6 @@ export function ExperienceApp() {
 
             return (
               <li key={position.id} className="relative">
-                {/* Узел: ромб на оси линии. Ось одна на всех — левый край
-                  списка; и линия, и ромб съезжают на половину своей ширины,
-                  поэтому подгонять смещение вручную не нужно. По вертикали
-                  центр ромба совпадает с серединой строки периода. */}
                 <span
                   aria-hidden
                   className={cn(
@@ -66,8 +59,7 @@ export function ExperienceApp() {
                 />
 
                 <p className="text-2xs text-ink-faint font-mono">
-                  {formatPeriod(position.period)}
-                  <span className="mx-1.5">·</span>
+                  {formatPeriod(position.period)},{' '}
                   {formatDuration(durationInMonths(position.period))}
                 </p>
 

@@ -8,6 +8,11 @@ import { settingsStore } from '@/lib/settings/store';
 const STORAGE_KEY = 'portfolio:booted';
 const BOOT_DURATION = 1400;
 
+/** Отметить сессию начатой, минуя заставку. */
+export function markSessionStarted() {
+  window.sessionStorage.setItem(STORAGE_KEY, '1');
+}
+
 /**
  * Состояние заставки живёт вне React: его меняют таймер и клик, а компонент
  * только подписан. Иначе понадобился бы setState прямо в эффекте.

@@ -8,12 +8,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
 
   const appRoutes = Object.values(applications)
-    .filter((app) => app.id !== 'settings')
+    .filter((app) => app.id !== 'settings' && app.opensAs !== 'page')
     .map((app) => app.route)
     .filter((route): route is string => route !== null);
 
   return [
     { url: siteUrl, lastModified, priority: 1 },
+    { url: `${siteUrl}/desktop`, lastModified, priority: 0.8 },
     ...appRoutes.map((route) => ({
       url: `${siteUrl}${route}`,
       lastModified,

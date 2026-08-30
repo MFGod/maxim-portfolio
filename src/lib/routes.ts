@@ -3,6 +3,9 @@ import { isSettingsSection, type SettingsSectionId } from '@/lib/settings/regist
 import { settingsSectionStore } from '@/lib/settings/section-store';
 import type { WindowInstance, WindowPayload } from '@/lib/window-manager/types';
 
+/** Адрес рабочего стола. */
+export const DESKTOP_ROUTE = '/desktop';
+
 type RouteTarget = {
   app: AppId;
   payload?: WindowPayload;
@@ -40,5 +43,5 @@ export function pathnameFromWindow(instance: WindowInstance): string {
   if (instance.app === 'settings') {
     return `/settings/${settingsSectionStore.get()}`;
   }
-  return applications[instance.app].route ?? '/';
+  return applications[instance.app].route ?? DESKTOP_ROUTE;
 }

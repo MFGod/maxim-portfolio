@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { pathnameFromWindow, targetFromPathname } from '@/lib/routes';
+import { applications, routeToApp, windowMeta } from '@/data/applications';
+import { DESKTOP_ROUTE, pathnameFromWindow, targetFromPathname } from '@/lib/routes';
 import { settingsSectionStore } from '@/lib/settings/section-store';
 import type { WindowInstance } from '@/lib/window-manager/types';
 
@@ -36,6 +37,33 @@ describe('targetFromPathname', () => {
     expect(targetFromPathname('/')).toBeNull();
     expect(targetFromPathname('/unknown')).toBeNull();
   });
+
+  it('корень занят картой и окна не открывает', () => {
+    expect(applications.world.route).toBe('/');
+    expect(routeToApp.has('/')).toBe(false);
+  });
+
+  it('рабочий стол — свой адрес, а не корень', () => {
+    expect(DESKTOP_ROUTE).toBe('/desktop');
+    expect(targetFromPathname(DESKTOP_ROUTE)).toBeNull();
+  });
+});
+
+describe('программы-страницы', () => {
+  it('карта открывается страницей, а не окном', () => {
+    expect(applications.world.opensAs).toBe('page');
+  });
+
+  it('обратный индекс держит только оконные программы', () => {
+    for (const id of routeToApp.values()) {
+      expect(applications[id].opensAs).not.toBe('page');
+    }
+  });
+
+  it('геометрию окна у программы-страницы не спрашивают', () => {
+    expect(() => windowMeta('world')).toThrow(/окна у неё нет/);
+    expect(windowMeta('resume').defaultSize.width).toBeGreaterThan(0);
+  });
 });
 
 describe('pathnameFromWindow', () => {
@@ -51,8 +79,8 @@ describe('pathnameFromWindow', () => {
     ).toBe('/projects/agents-config');
   });
 
-  it('окно без маршрута возвращает корень', () => {
-    expect(pathnameFromWindow(instance({ app: 'terminal' }))).toBe('/');
+  it('окно без маршрута возвращает рабочий стол, а не корень', () => {
+    expect(pathnameFromWindow(instance({ app: 'terminal' }))).toBe(DESKTOP_ROUTE);
   });
 });
 

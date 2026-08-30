@@ -1,4 +1,4 @@
-import { applications, type AppId } from '@/data/applications';
+import { windowMeta, type AppId } from '@/data/applications';
 import { deepFreeze } from '@/lib/freeze';
 
 import type {
@@ -41,7 +41,7 @@ function clamp(value: number, min: number, max: number): number {
 
 /** Окно не может стать меньше своего минимума и больше рабочей области. */
 function constrainSize(app: AppId, size: Rect, workspace: Workspace): Rect {
-  const { minSize } = applications[app];
+  const { minSize } = windowMeta(app);
   const width = clamp(size.width, minSize.width, workspace.width);
   const height = clamp(size.height, minSize.height, workspace.height);
   return { ...size, width, height };
@@ -85,7 +85,7 @@ function initialRect(
   cascadeIndex: number,
   centered: boolean,
 ): Rect {
-  const { defaultSize } = applications[app];
+  const { defaultSize } = windowMeta(app);
   const sized = constrainSize(
     app,
     { x: 0, y: 0, width: defaultSize.width, height: defaultSize.height },

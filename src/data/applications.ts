@@ -9,6 +9,7 @@ import {
   Code2,
   Cpu,
   Layers,
+  Map as MapIcon,
   Milestone,
   Monitor,
   Settings,
@@ -31,6 +32,7 @@ export const APP_IDS = deepFreeze([
   'about',
   'experience',
   'skills',
+  'world',
   'terminal',
   'arcade',
   'source',
@@ -45,25 +47,17 @@ export const APP_IDS = deepFreeze([
 
 export type AppId = (typeof APP_IDS)[number];
 
-export type ApplicationMeta = {
+/** Общее у всех программ: чем подписана, где показывается, как называется. */
+type CommonMeta = {
   id: AppId;
   title: string;
   /** Подпись под иконкой на рабочем столе и во всплывающей подсказке дока. */
   hint: string;
   icon: IconComponent;
-  /** Адрес для deep linking. `null` — окно без собственного маршрута. */
-  route: string | null;
-  defaultSize: { width: number; height: number };
-  minSize: { width: number; height: number };
   /** Показывать ли в доке. */
   inDock: boolean;
   /** Показывать ли иконкой на рабочем столе. */
   onDesktop: boolean;
-  /**
-   * Корпус окна. `glass` убирает фон, тень и плашку заголовка: содержимое
-   * ложится прямо на обои и само отвечает за читаемость.
-   */
-  chrome?: 'solid' | 'glass';
   /**
    * Ключ перевода заголовка. Есть только у системных приложений: содержимое
    * резюме одноязычное, а надписи оболочки следуют за настройкой языка.
@@ -72,6 +66,32 @@ export type ApplicationMeta = {
   /** Ключ перевода подписи. Идёт в паре с `titleKey`. */
   hintKey?: TranslationKey;
 };
+
+/** Программа, открывающаяся окном рабочего стола. Такие почти все. */
+export type WindowApplication = CommonMeta & {
+  opensAs?: 'window';
+  /** Адрес для deep linking. `null` — окно без собственного маршрута. */
+  route: string | null;
+  defaultSize: { width: number; height: number };
+  minSize: { width: number; height: number };
+  /**
+   * Корпус окна. `glass` убирает фон, тень и плашку заголовка: содержимое
+   * ложится прямо на обои и само отвечает за читаемость.
+   */
+  chrome?: 'solid' | 'glass';
+};
+
+/**
+ * Программа, открывающаяся собственной страницей на весь экран, мимо оболочки.
+ * Такая одна — карта карьеры: она точка входа на сайт, и второго, оконного
+ * представления у неё нет.
+ */
+export type PageApplication = CommonMeta & {
+  opensAs: 'page';
+  route: string;
+};
+
+export type ApplicationMeta = WindowApplication | PageApplication;
 
 export const applications: Record<AppId, ApplicationMeta> = deepFreeze({
   computer: {
@@ -164,6 +184,16 @@ export const applications: Record<AppId, ApplicationMeta> = deepFreeze({
     inDock: true,
     onDesktop: true,
     chrome: 'glass',
+  },
+  world: {
+    id: 'world',
+    title: 'Карта карьеры',
+    hint: 'Карьерный путь маршрутом по трёхмерному миру',
+    icon: MapIcon,
+    opensAs: 'page',
+    route: '/',
+    inDock: true,
+    onDesktop: true,
   },
   terminal: {
     id: 'terminal',
@@ -268,6 +298,17 @@ export const applications: Record<AppId, ApplicationMeta> = deepFreeze({
   },
 });
 
+/** Описание программы как окна. */
+export function windowMeta(app: AppId): WindowApplication {
+  const meta = applications[app];
+  if (meta.opensAs === 'page') {
+    throw new Error(
+      `Программа «${meta.title}» открывается страницей ${meta.route}, окна у неё нет`,
+    );
+  }
+  return meta;
+}
+
 /**
  * Окна без собственной программы: карточка проекта, папка и текстовый файл
  * открываются содержимым, а не запуском из дока или списка программ.
@@ -283,7 +324,7 @@ export const programIds: AppId[] = APP_IDS.filter((id) => !contentWindows.includ
  * в «Моём компьютере» и в поиске — как Launchpad и Spotlight в macOS.
  */
 export const dockGroups: AppId[][] = deepFreeze([
-  ['computer', 'resume', 'projects', 'contact'],
+  ['computer', 'resume', 'projects', 'world', 'contact'],
   ['terminal', 'arcade', 'settings'],
 ]);
 
@@ -299,7 +340,7 @@ export const programGroups: { id: string; label: string; apps: AppId[] }[] = dee
     {
       id: 'resume',
       label: 'Резюме',
-      apps: ['resume', 'projects', 'experience', 'skills', 'about', 'contact'],
+      apps: ['resume', 'projects', 'experience', 'skills', 'world', 'about', 'contact'],
     },
     {
       id: 'tools',
@@ -320,6 +361,7 @@ export const launcherOrder: AppId[] = deepFreeze([
   'projects',
   'experience',
   'skills',
+  'world',
   'about',
   'contact',
   'terminal',
@@ -349,9 +391,12 @@ export const externalLinks: ExternalLink[] = deepFreeze([
   },
 ]);
 
-/** Обратный индекс: маршрут → приложение. Нужен для deep linking. */
+/** Обратный индекс: маршрут → окно. Нужен для deep linking. */
 export const routeToApp = new Map<string, AppId>(
   Object.values(applications)
-    .filter((app): app is ApplicationMeta & { route: string } => app.route !== null)
+    .filter(
+      (app): app is WindowApplication & { route: string } =>
+        app.opensAs !== 'page' && app.route !== null,
+    )
     .map((app) => [app.route, app.id]),
 );

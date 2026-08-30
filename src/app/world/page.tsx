@@ -1,19 +1,9 @@
-import type { Metadata } from 'next';
+import { permanentRedirect } from 'next/navigation';
 
-import { WorldScreen } from '@/components/world/world-screen';
-
-export const metadata: Metadata = {
-  title: 'Карта карьеры',
-  description:
-    'Карьерный путь как маршрут по миру: места работы точками, проекты рядом с ними, непройденная вершина впереди.',
-  alternates: { canonical: '/world' },
-  openGraph: {
-    title: 'Карта карьеры',
-    description: 'Карьерный путь как маршрут по миру.',
-    url: '/world',
-  },
-};
-
+/**
+ * Карта переехала на корень: она стала точкой входа в портфолио. Старый адрес
+ * остаётся рабочим — на него могли ссылаться.
+ */
 export default function Page() {
-  return <WorldScreen />;
+  permanentRedirect('/');
 }

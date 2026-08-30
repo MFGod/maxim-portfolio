@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { WORLD_BOUNDS, worldChapters, worldPeak } from '@/data/world-places';
 import {
+  WORLD_LIGHT_WIDTH,
   WORLD_MIN_MEMORY_GB,
   WORLD_MIN_WIDTH,
+  worldQuality,
   worldSupport,
   type WorldEnvironment,
 } from '@/lib/world/capability';
@@ -15,6 +17,7 @@ describe('готовность машины к миру', () => {
     animations: 'full',
     webgl2: true,
     deviceMemory: 8,
+    coarsePointer: false,
   };
 
   it('всё сошлось — мир можно поднимать', () => {
@@ -53,6 +56,50 @@ describe('готовность машины к миру', () => {
 
   it('до гидратации ширина неизвестна и не блокирует', () => {
     expect(worldSupport({ ...ready, viewportWidth: null })).toBe('ready');
+  });
+
+  it('телефон мир не отсекает: порог ширины ниже любого телефона', () => {
+    expect(worldSupport({ ...ready, viewportWidth: 390, coarsePointer: true })).toBe(
+      'ready',
+    );
+  });
+});
+
+describe('уровень отрисовки', () => {
+  const desktop: WorldEnvironment = {
+    viewportWidth: 1440,
+    animations: 'full',
+    webgl2: true,
+    deviceMemory: 8,
+    coarsePointer: false,
+  };
+
+  it('просторный экран и мышь — полный уровень', () => {
+    expect(worldQuality(desktop)).toBe('full');
+  });
+
+  it('телефон получает облегчённый уровень', () => {
+    expect(worldQuality({ ...desktop, viewportWidth: 390, coarsePointer: true })).toBe(
+      'light',
+    );
+  });
+
+  it('планшет во всю ширину экрана считается просторным', () => {
+    expect(
+      worldQuality({
+        ...desktop,
+        viewportWidth: WORLD_LIGHT_WIDTH,
+        coarsePointer: true,
+      }),
+    ).toBe('full');
+  });
+
+  it('мало памяти — облегчённый уровень даже на мыши', () => {
+    expect(worldQuality({ ...desktop, deviceMemory: 4 })).toBe('light');
+  });
+
+  it('узкое окно на мыши уровень не понижает: там дело в кадре, а не в машине', () => {
+    expect(worldQuality({ ...desktop, viewportWidth: 420 })).toBe('full');
   });
 });
 
