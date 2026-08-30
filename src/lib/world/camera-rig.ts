@@ -13,7 +13,7 @@ import {
   type PathKey,
   type Point3,
 } from './camera-path';
-import { planFlight } from './flight-plan';
+import { edgeShare, edgeWindow, planFlight, shortfallAt } from './flight-plan';
 import { clampCameraToShell, clampMovementToShell, shellHeightAt } from './map-shell';
 import { obstacleHeightAt } from './obstacles';
 
@@ -89,9 +89,6 @@ const LOOK_SENSITIVITY = 0.0042;
 /** Предел наклона свободного взгляда: у зенита и надира кадр переворачивается. */
 const LOOK_PITCH_LIMIT = (78 * Math.PI) / 180;
 
-/** Полоса, в которой предел высоты начинает действовать, а не срабатывает разом. */
-const LIMIT_MARGIN = 0.35;
-
 /** Как быстро камера возвращается на план, когда преграда кончилась. */
 const RELEASE_RATE = 2.5;
 
@@ -103,13 +100,6 @@ const LOOK_AHEAD_UNITS = 3;
 
 /** Сколько точек смотрим на этом отрезке. */
 const LOOK_AHEAD_STEPS = 8;
-
-/** Мягкий предел снизу: выше полосы значение не трогается, ниже — упирается. */
-function liftAbove(value: number, limit: number): number {
-  const blend = Math.min(Math.max(0.5 + (value - limit) / (2 * LIMIT_MARGIN), 0), 1);
-
-  return limit + (value - limit) * blend + LIMIT_MARGIN * blend * (1 - blend);
-}
 
 export function createCameraRig(
   camera: THREE.PerspectiveCamera,
@@ -310,28 +300,30 @@ export function createCameraRig(
 
     flight.elapsed += delta * 1000;
     const t = Math.min(flight.elapsed / flight.durationMs, 1);
-    const pose = samplePath(flight.keys, easeFlight(t));
+    const walked = easeFlight(t);
+    const pose = samplePath(flight.keys, walked);
 
     camera.position.set(...pose.position);
 
-    /** Сколько не хватает высоты в точке: пол над водой и купол над рельефом. */
-    const shortfall = (point: Point3) => {
+    /** Предел снизу в точке: пол над водой и купол над рельефом. */
+    const limitAt = (point: Point3) => {
       const ceiling = collisions ? shellHeightAt(point[0], point[2]) : null;
-      const limit = Math.max(CAMERA_FLOOR, ceiling ?? -Infinity);
 
-      return Math.max(liftAbove(point[1], limit) - point[1], 0);
+      return Math.max(CAMERA_FLOOR, ceiling ?? -Infinity);
     };
 
-    const here = shortfall(pose.position);
+    const here = shortfallAt(pose.position[1], limitAt(pose.position));
 
     const total = pathLengths(flight.keys).total;
-    const walked = easeFlight(t);
     const window = total > 0 ? LOOK_AHEAD_UNITS / total : 0;
 
-    let need = here;
+    let need = here.hard + here.soft;
     for (let ahead = 1; ahead <= LOOK_AHEAD_STEPS; ahead++) {
       const at = Math.min(walked + (window * ahead) / LOOK_AHEAD_STEPS, 1);
-      need = Math.max(need, shortfall(samplePath(flight.keys, at).position));
+      const seen = samplePath(flight.keys, at).position;
+      const rise = shortfallAt(seen[1], limitAt(seen));
+
+      need = Math.max(need, rise.hard + rise.soft);
       if (at >= 1) break;
     }
 
@@ -344,12 +336,15 @@ export function createCameraRig(
       lift += liftSpeed * delta;
     }
 
-    if (here > lift) {
-      lift = here;
-      liftSpeed = 0;
-    }
-
-    camera.position.y += lift;
+    /**
+     * Отвод гасится у концов тем же окном, что и опоры плана: старт и финиш — места,
+     * где камере стоять разрешено, и приподнимать её там не за чем. Жёсткая часть не
+     * гасится: на этих точках она равна нулю сама и рывка не даёт.
+     */
+    camera.position.y += Math.max(
+      lift * edgeWindow(walked, edgeShare(total)),
+      here.hard,
+    );
 
     if (flight.freeLook && lookTaken) {
       aimByAngles();

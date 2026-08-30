@@ -6,6 +6,8 @@ import {
   TWINKLE_DEPTH,
   TWINKLE_PERIOD,
 } from '@/lib/world/stars';
+import { DRAW_DISTANCE } from '@/lib/world/horizon';
+import { MOON_DISTANCE } from '@/lib/world/moon';
 
 describe('звёздное поле', () => {
   it('звёзд хватает на небо, но они не застят луну', () => {
@@ -14,11 +16,8 @@ describe('звёздное поле', () => {
   });
 
   it('поле стоит за луной и не выходит за дальнюю плоскость', () => {
-    const MOON_DISTANCE = 180;
-    const FAR_PLANE = 250;
-
     expect(STAR_RADIUS).toBeGreaterThan(MOON_DISTANCE);
-    expect(STAR_RADIUS).toBeLessThan(FAR_PLANE);
+    expect(STAR_RADIUS).toBeLessThan(DRAW_DISTANCE);
   });
 });
 

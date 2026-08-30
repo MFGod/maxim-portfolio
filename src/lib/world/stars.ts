@@ -2,11 +2,13 @@
 
 import * as THREE from 'three';
 
+import { DRAW_DISTANCE } from './horizon';
+
 /** Звёзд в поле. */
 export const STAR_COUNT = 1400;
 
-/** Радиус сферы, юнитов. */
-export const STAR_RADIUS = 210;
+/** Радиус сферы, юнитов. Сфера идёт за камерой и должна остаться в прорисовке. */
+export const STAR_RADIUS = DRAW_DISTANCE - 8;
 
 /** Ниже какой доли высоты сферы звёзд не ставится. */
 const HORIZON = -0.12;

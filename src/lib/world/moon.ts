@@ -2,8 +2,10 @@
 
 import * as THREE from 'three';
 
-/** Как далеко от камеры висит диск. */
-const DISTANCE = 180;
+import { DRAW_DISTANCE } from './horizon';
+
+/** Как далеко от камеры висит диск. Диск идёт за камерой, но внутри прорисовки. */
+export const MOON_DISTANCE = DRAW_DISTANCE - 24;
 
 /** Доля высоты кадра, которую занимает диск вместе с ореолом. */
 const SCALE = 0.2;
@@ -110,7 +112,7 @@ export function createMoon(parent: THREE.Object3D, direction: THREE.Vector3): Mo
 
   return {
     update: (camera: THREE.Camera) => {
-      sprite.position.copy(camera.position).addScaledVector(aim, DISTANCE);
+      sprite.position.copy(camera.position).addScaledVector(aim, MOON_DISTANCE);
     },
 
     setColor: (color: number) => {
